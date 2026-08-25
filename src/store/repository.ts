@@ -1,5 +1,5 @@
 import { loadStore, saveStore } from './db.js';
-import type { Store, TouchLogEntry } from './types.js';
+import type { Store, TouchLogEntry, TouchOutcome } from './types.js';
 
 export class Repository {
   private store: Store;
@@ -25,6 +25,19 @@ export class Repository {
 
   recordTouch(entry: TouchLogEntry): void {
     this.store.touchLog.push(entry);
+  }
+
+  /** Called once Lucas's decision on a proposed touch is known — this is the learning loop's input. */
+  recordOutcome(id: string, status: TouchOutcome, outcomeNote?: string): void {
+    const entry = this.store.touchLog.find((t) => t.id === id);
+    if (!entry) throw new Error(`touch log entry not found: ${id}`);
+    entry.status = status;
+    entry.outcomeAt = new Date().toISOString();
+    if (outcomeNote) entry.outcomeNote = outcomeNote;
+  }
+
+  allTouches(): TouchLogEntry[] {
+    return this.store.touchLog;
   }
 
   save(): void {

@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "assess": "tsx src/cli/assess.ts",
+    "stats": "tsx src/cli/stats.ts",
+    "outcome": "tsx src/cli/outcome.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
