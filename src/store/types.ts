@@ -12,6 +12,10 @@ export interface TouchLogEntry {
   outcomeAt?: string;
   /** Free-text context on the outcome, e.g. "edited: swapped to text" or "bought 10-class pack instead of membership". */
   outcomeNote?: string;
+  /** Denormalized at proposal time so `npm run send` can dispatch without re-running assess. */
+  recipient: { firstName: string; lastName: string; email: string | null; phone: string | null };
+  headline: string;
+  message: string;
 }
 
 export interface Store {

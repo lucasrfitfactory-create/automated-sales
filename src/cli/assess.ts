@@ -74,6 +74,9 @@ async function main() {
         classSessionId: session.id,
         proposedAt: now.toISOString(),
         status: 'proposed',
+        recipient: { firstName: client.firstName, lastName: client.lastName, email: client.email, phone: client.phone },
+        headline: action.headline,
+        message: action.message,
       });
     }
     repo.markClassProcessed(session.id);
