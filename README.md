@@ -2,8 +2,9 @@
 
 Reads class rosters from Mariana Tek, checks each attendee's membership/pack/
 intro-offer status, and proposes a follow-up action (email or text) based on
-a rules playbook. v1 only drafts and recaps — it does not send messages or
-touch Mariana Tek/HighLevel yet. You review the recap and approve manually.
+a rules playbook. Nothing sends on its own — Lucas reviews the recap in chat
+and approves items one at a time; only then does `npm run send` dispatch
+that specific message through HighLevel.
 
 ## Status
 
@@ -24,10 +25,15 @@ touch Mariana Tek/HighLevel yet. You review the recap and approve manually.
   products in Mariana Tek but not publicly listed (staff-applied), so their
   exact offer-name strings still need confirming against the real API once
   it's live.
-- **HighLevel**: not wired in yet — not needed until we're sending/executing
-  approved actions (phase 2).
+- **HighLevel** (`src/highlevel/`): client built against their public,
+  verified API docs (contacts/upsert, conversations/messages) — real
+  schemas, not guesses. Runs in mock mode until Lucas generates a **Private
+  Integration Token** (no external approval needed, unlike Mariana Tek —
+  see Setup below) and sets `HIGHLEVEL_MODE=real`.
 - **Recap delivery**: printed as a markdown table in chat (and saved to
-  `data/recaps/`) for Lucas to review. Sending is a manual step for now.
+  `data/recaps/`) for Lucas to review. Once he approves an item, `npm run
+  send -- <touchId>` dispatches that one message through HighLevel — never
+  automatic, always one explicit approval per send.
 
 ## How it works
 
@@ -40,7 +46,10 @@ touch Mariana Tek/HighLevel yet. You review the recap and approve manually.
    the same segment within that rule's cooldown window.
 4. Prints/saves a recap listing every attendee, their status, and the
    proposed action (or why none/nothing new was proposed).
-5. Marks the class as processed and logs any proposed touches.
+5. Marks the class as processed and logs any proposed touches (including
+   the drafted message and recipient contact info).
+6. Once Lucas approves an item, `npm run send -- <touchId>` upserts the
+   contact in HighLevel and sends that one email/text.
 
 ## Setup
 
@@ -49,6 +58,19 @@ npm install
 cp .env.example .env   # fill in as integrations go live; mock mode needs no changes
 npm run assess
 ```
+
+### Getting a HighLevel Private Integration Token
+
+Unlike Mariana Tek, this doesn't need external approval — Lucas can do this
+directly, in a couple minutes:
+
+1. In the HighLevel sub-account (app.autocallerai.ca), go to **Settings ->
+   Private Integrations**.
+2. Create a new integration, scoped to `contacts.write` and
+   `conversations/message.write`.
+3. Copy the generated token into `.env` as `HIGHLEVEL_PRIVATE_TOKEN`, and
+   set `HIGHLEVEL_LOCATION_ID` (from the dashboard URL:
+   `.../location/XBLL0vgIMtnUgHBUu2du/...`) and `HIGHLEVEL_MODE=real`.
 
 ## Learning loop
 
@@ -80,9 +102,11 @@ model is already there.
   real Admin API reference (especially `getMembershipStatus`, which needs
   the purchases/packages/memberships resource shape, and how "Guest of
   ClassPass" actually shows up on a roster/reservation).
-- Wire up Outlook sending directly (vs. manual) once the recap format is
-  validated.
-- Phase 2: HighLevel integration to actually send approved messages, and
-  Mariana Tek write access to process approved membership sales.
+- Lucas to generate a HighLevel Private Integration Token (see Setup above)
+  and confirm the `contacts.write` / `conversations/message.write` scopes
+  work as expected against a real send.
+- Phase 2: Mariana Tek write access to process approved membership sales
+  directly (currently out of scope — sales still need to be entered in
+  Mariana Tek manually even after a client agrees).
 - Phase 3: feed real conversion outcomes back through `npm run outcome` and
   start actually rewriting playbook rules based on `npm run stats`.
