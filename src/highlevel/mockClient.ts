@@ -17,6 +17,9 @@ export function createMockHighLevelClient(): HighLevelClient {
       contactsByKey.set(key, contact);
       return contact;
     },
+    async getConversationHistory(_contactId) {
+      return [];
+    },
     async sendEmail(contactId, { subject, body }) {
       console.log(`[mock HighLevel] EMAIL to ${contactId} — "${subject}"\n${body}`);
       return { messageId: `mock-msg-${nextId++}` };

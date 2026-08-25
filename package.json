@@ -8,6 +8,7 @@
     "stats": "tsx src/cli/stats.ts",
     "outcome": "tsx src/cli/outcome.ts",
     "send": "tsx src/cli/send.ts",
+    "lookup": "tsx src/cli/lookup.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
