@@ -11,9 +11,7 @@ export interface WeeklyUnlimitedTier {
   note: string;
 }
 
-// NOTE: Lucas said 3-month was $59/week same as 6-month; the live site
-// shows $69/week for 3-month. Using the live site's number below — confirm
-// with Lucas which is correct before this goes out for real.
+// Confirmed with Lucas 2026-08-25: 12mo $49/wk, 6mo $59/wk, 3mo $69/wk.
 export const WEEKLY_UNLIMITED_TIERS: WeeklyUnlimitedTier[] = [
   { commitment: '12-month', pricePerWeek: 49, note: 'best value' },
   { commitment: '6-month', pricePerWeek: 59, note: 'includes a free guest pass' },

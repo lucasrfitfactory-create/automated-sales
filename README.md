@@ -18,10 +18,12 @@ touch Mariana Tek/HighLevel yet. You review the recap and approve manually.
   (welcome -> mid-trial pricing nudge -> final push). Class-pack-low,
   lapsed-member, and generic-walk-in rules are still **placeholder** —
   haven't been reviewed against the real playbook.
-- **Pricing** (`src/rules/pricing.ts`): pulled from the live pricing page
-  2026-08-25. Open question: Lucas said the 3-month Weekly Unlimited tier
-  was $59/week; the live site shows $69/week (6-month is the one at $59).
-  Using the site's number until confirmed.
+- **Pricing** (`src/rules/pricing.ts`): confirmed with Lucas 2026-08-25 —
+  Weekly Unlimited is $49/wk (12mo), $59/wk (6mo), $69/wk (3mo). The $99
+  1-month trial, Comeback Offer, and ClassPass 1-month pass are real
+  products in Mariana Tek but not publicly listed (staff-applied), so their
+  exact offer-name strings still need confirming against the real API once
+  it's live.
 - **HighLevel**: not wired in yet — not needed until we're sending/executing
   approved actions (phase 2).
 - **Recap delivery**: printed as a markdown table in chat (and saved to
@@ -70,9 +72,9 @@ model is already there.
 
 ## Next steps
 
-- Confirm the 3-month Weekly Unlimited price ($59 vs $69/week) and get real
-  trigger/copy details for class-pack-low, lapsed-member, and generic-walk-in
-  segments to replace their placeholders in `src/rules/playbook.ts`.
+- Get real trigger/copy details for class-pack-low, lapsed-member, and
+  generic-walk-in segments to replace their placeholders in
+  `src/rules/playbook.ts`.
 - Once Mariana Tek API access is approved: fill in `MARIANA_TEK_API_URL`/
   `MARIANA_TEK_API_KEY`, verify `src/marianaTek/realClient.ts` against the
   real Admin API reference (especially `getMembershipStatus`, which needs
