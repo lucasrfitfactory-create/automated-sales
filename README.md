@@ -66,8 +66,11 @@ directly, in a couple minutes:
 
 1. In the HighLevel sub-account (app.autocallerai.ca), go to **Settings ->
    Private Integrations**.
-2. Create a new integration, scoped to `contacts.write` and
-   `conversations/message.write`.
+2. Create a new integration, scoped to `contacts.write`,
+   `conversations/message.write`, `conversations/message.readonly`, and
+   `conversations.readonly`. The two read scopes aren't used by v1 yet, but
+   they're what the learning loop needs later (checking whether a client
+   already replied) — cheaper to grant now than to re-scope the token later.
 3. Copy the generated token into `.env` as `HIGHLEVEL_PRIVATE_TOKEN`, and
    set `HIGHLEVEL_LOCATION_ID` (from the dashboard URL:
    `.../location/XBLL0vgIMtnUgHBUu2du/...`) and `HIGHLEVEL_MODE=real`.
