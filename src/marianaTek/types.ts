@@ -18,6 +18,15 @@ export interface MtRosterEntry {
   classSessionId: string;
   clientId: string;
   attended: boolean;
+  /**
+   * How this specific booking was made. 'classpass' = shows in Mariana Tek
+   * as "Guest of ClassPass" — a booking-channel signal independent of the
+   * client's underlying membership status (they might otherwise show as
+   * no_active_status, or already hold some other pack/trial).
+   * TODO: confirm the actual field/shape once we have real Admin API roster
+   * responses — this may live on the reservation rather than the roster row.
+   */
+  bookingSource: 'direct' | 'classpass';
 }
 
 // Discriminated union — what a client's standing looks like at the moment
@@ -25,7 +34,7 @@ export interface MtRosterEntry {
 // engine (src/rules/engine.ts).
 export type MtMembershipStatus =
   | {
-      kind: 'intro_offer';
+      kind: 'trial_offer';
       offerName: string;
       startDate: string; // ISO date
       endDate: string; // ISO date

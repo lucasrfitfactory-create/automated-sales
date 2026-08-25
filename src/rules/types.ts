@@ -1,9 +1,10 @@
-import type { MtClassSession, MtClient, MtMembershipStatus } from '../marianaTek/types.js';
+import type { MtClassSession, MtClient, MtMembershipStatus, MtRosterEntry } from '../marianaTek/types.js';
 
 export interface RuleContext {
   client: MtClient;
   status: MtMembershipStatus;
   classSession: MtClassSession;
+  rosterEntry: MtRosterEntry;
   now: Date;
 }
 

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createMarianaTekClient } from '../marianaTek/index.js';
-import { buildRecapText, type RecapItem } from '../recap/buildRecap.js';
+import { buildRecapTable, buildRecapText, type RecapItem } from '../recap/buildRecap.js';
 import { evaluate } from '../rules/engine.js';
 import { PLAYBOOK } from '../rules/playbook.js';
 import { Repository } from '../store/repository.js';
@@ -44,7 +44,7 @@ async function main() {
         mariana.getMembershipStatus(entry.clientId),
       ]);
 
-      const action = evaluate({ client, status, classSession: session, now }, PLAYBOOK);
+      const action = evaluate({ client, status, classSession: session, rosterEntry: entry, now }, PLAYBOOK);
 
       if (!action) {
         items.push({ client, classSession: session, action: null });
@@ -81,12 +81,12 @@ async function main() {
 
   repo.save();
 
-  const recap = buildRecapText(items);
-  console.log(recap);
+  const recapText = buildRecapText(items);
+  console.log(buildRecapTable(items));
 
   mkdirSync('data/recaps', { recursive: true });
   const recapPath = `data/recaps/${now.toISOString().replace(/[:.]/g, '-')}.md`;
-  writeFileSync(recapPath, recap);
+  writeFileSync(recapPath, recapText);
   console.error(`\n(recap saved to ${recapPath})`);
 }
 

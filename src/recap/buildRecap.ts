@@ -42,3 +42,24 @@ export function buildRecapText(items: RecapItem[]): string {
   lines.push('Reply to approve/edit any of the above, or say "send all" to approve everything as drafted.');
   return lines.join('\n');
 }
+
+function escapeCell(s: string): string {
+  return s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+}
+
+/** GFM markdown table — meant to be pasted directly into chat. */
+export function buildRecapTable(items: RecapItem[]): string {
+  const header = '| Class | Client | Status | Action | Draft |\n|---|---|---|---|---|';
+  const rows = items.map((item) => {
+    const cls = `${item.classSession.className} (${new Date(item.classSession.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+    const name = `${item.client.firstName} ${item.client.lastName}`;
+    if (item.action) {
+      return `| ${cls} | ${name} | ${escapeCell(item.action.segmentLabel)} | **${item.action.channel.toUpperCase()}**: ${escapeCell(item.action.headline)} | ${escapeCell(item.action.message)} |`;
+    }
+    if (item.skippedReason) {
+      return `| ${cls} | ${name} | ${escapeCell(item.skippedReason)} | _skipped (cooldown)_ | — |`;
+    }
+    return `| ${cls} | ${name} | no active offer/pack | _no action needed_ | — |`;
+  });
+  return [header, ...rows].join('\n');
+}
