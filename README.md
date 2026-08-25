@@ -12,15 +12,20 @@ touch Mariana Tek/HighLevel yet. You review the recap and approve manually.
   arrives — flip to `real` in `.env` once we have it. `src/marianaTek/realClient.ts`
   is a best-effort stub against the public Admin API overview and will need
   fixing against the actual reference once it's delivered with the key.
-- **Rules playbook** (`src/rules/playbook.ts`): **placeholder**, not yet
-  reviewed against Fit Factory's real sales process. Exists so the pipeline
-  is exercisable end to end. Needs the real trigger conditions, timing, and
-  message copy.
+- **Rules playbook** (`src/rules/playbook.ts`): the 3 confirmed paths ($39
+  1-week trial, $99 1-month trial/Comeback/ClassPass-purchase, ClassPass
+  guest booking) are real, with a 3-touch conversion-oriented cadence
+  (welcome -> mid-trial pricing nudge -> final push). Class-pack-low,
+  lapsed-member, and generic-walk-in rules are still **placeholder** —
+  haven't been reviewed against the real playbook.
+- **Pricing** (`src/rules/pricing.ts`): pulled from the live pricing page
+  2026-08-25. Open question: Lucas said the 3-month Weekly Unlimited tier
+  was $59/week; the live site shows $69/week (6-month is the one at $59).
+  Using the site's number until confirmed.
 - **HighLevel**: not wired in yet — not needed until we're sending/executing
   approved actions (phase 2).
-- **Recap delivery**: printed to stdout + saved to `data/recaps/`. Emailing
-  it via Outlook is a manual step for now (done from the Claude Code session
-  that ran `npm run assess`).
+- **Recap delivery**: printed as a markdown table in chat (and saved to
+  `data/recaps/`) for Lucas to review. Sending is a manual step for now.
 
 ## How it works
 
@@ -43,18 +48,39 @@ cp .env.example .env   # fill in as integrations go live; mock mode needs no cha
 npm run assess
 ```
 
+## Learning loop
+
+The touch log (`data/store.json`) is more than a dedup/cooldown mechanism —
+it's the record the "keep what works, adapt what doesn't" loop runs on:
+
+1. Every proposed action from `npm run assess` is logged with `status:
+   'proposed'`.
+2. As Lucas approves/edits/rejects items from a recap (in chat, for now),
+   run `npm run outcome -- <touchId> <approved|edited|rejected|sent>` to
+   record it. Once messages are actually sent and we can tell if someone
+   converted, `converted` closes the loop.
+3. `npm run stats` reports approval rate per segment (`trial_1week_convert`,
+   `classpass_guest_pitch`, etc.) — a segment that's consistently rejected or
+   edited the same way is a signal to rewrite it in `src/rules/playbook.ts`;
+   one that converts well is a pattern to reuse elsewhere.
+
+This is manual/assisted for now (I read Lucas's decisions and record them) —
+automating the recap-reply -> outcome pipeline is a later step, but the data
+model is already there.
+
 ## Next steps
 
-- Lucas to provide the real segmentation/playbook rules (trigger conditions
-  per membership status, message tone/offers, cooldowns) to replace the
-  placeholder in `src/rules/playbook.ts`.
+- Confirm the 3-month Weekly Unlimited price ($59 vs $69/week) and get real
+  trigger/copy details for class-pack-low, lapsed-member, and generic-walk-in
+  segments to replace their placeholders in `src/rules/playbook.ts`.
 - Once Mariana Tek API access is approved: fill in `MARIANA_TEK_API_URL`/
   `MARIANA_TEK_API_KEY`, verify `src/marianaTek/realClient.ts` against the
   real Admin API reference (especially `getMembershipStatus`, which needs
-  the purchases/packages/memberships resource shape).
+  the purchases/packages/memberships resource shape, and how "Guest of
+  ClassPass" actually shows up on a roster/reservation).
 - Wire up Outlook sending directly (vs. manual) once the recap format is
   validated.
 - Phase 2: HighLevel integration to actually send approved messages, and
   Mariana Tek write access to process approved membership sales.
-- Phase 3: track outcomes (approved/rejected/converted) to start tuning the
-  playbook — the "always learning" loop.
+- Phase 3: feed real conversion outcomes back through `npm run outcome` and
+  start actually rewriting playbook rules based on `npm run stats`.
