@@ -38,7 +38,18 @@ import type {
 //     offers from real memberships; attributes.status is 'active' or
 //     'cancelled' (others not yet observed); membership_name is the real
 //     display name (confirmed "🎯 COMEBACK SPECIAL- 3 MONTH UNLIMITED" and
-//     "⚡️ 4 Month Unlimited Membership" in live data).
+//     "⚡️ 4 Month Unlimited Membership" in live data). Mariana Tek does NOT
+//     flip a trial's status away from 'active' once its scheduled end date
+//     passes — an expired-but-unconverted trial still shows status:'active'
+//     with a past scheduled_end_datetime, so "expired" has to be computed
+//     from dates, not from status (confirmed with Lucas 2026-08-26: this is
+//     correct — we should still reach out to expired-but-unconverted trials,
+//     see playbook.ts).
+//   - attributes.classroom_display on class_sessions — 'Group Fitness' vs
+//     'PSC - Personal Strength Coaching' vs 'REFINED Reformer'. Per Lucas
+//     2026-08-26, only 'Group Fitness' classes are in scope (PSC and
+//     Refined Reformer are different products/businesses and must never get
+//     the Fit Factory group-fitness pitch).
 //
 // STILL TODO / UNCONFIRMED:
 //   - Class packs: no class-pack/credit-based resource found yet in this
@@ -143,6 +154,7 @@ export function createRealMarianaTekClient(opts: { apiUrl: string; apiKey: strin
             hitOlderThanSince = true;
             break;
           }
+          if (item.attributes.classroom_display !== 'Group Fitness') continue; // excludes PSC and Refined Reformer
           sessions.push(mapClassSession(item));
         }
         if (hitOlderThanSince) break;
@@ -194,46 +206,70 @@ export function createRealMarianaTekClient(opts: { apiUrl: string; apiKey: strin
 
     async getMembershipStatus(clientId): Promise<MtMembershipStatus> {
       const d = await get<JsonApiList>('/api/membership_instances/', { user: clientId, page_size: '50' });
-      const instances = d.data;
+      // Exclude Refined Reformer Pilates and PSC (Personal Strength
+      // Coaching) products — different businesses/products from Fit
+      // Factory group fitness. Without this, a client who attends a real
+      // Group Fitness class but also separately has a Refined/PSC purchase
+      // on file gets that unrelated product surfaced as their "status",
+      // pitching Fit Factory Weekly Unlimited off the wrong product
+      // (confirmed as a real bug against live data 2026-08-26).
+      const isOtherBusinessProduct = (name: string) => /refined|reformer|\bpsc\b/i.test(name);
+      const instances = d.data.filter((i) => !isOtherBusinessProduct(i.attributes.membership_name ?? ''));
       if (instances.length === 0) return { kind: 'no_active_status' };
 
-      const active = instances.find((i) => i.attributes.status === 'active');
-      if (active) {
-        const a = active.attributes;
-        if (a.is_intro_offer) {
-          return {
-            kind: 'trial_offer',
-            offerName: a.membership_name,
-            startDate: a.start_date,
-            endDate: a.scheduled_end_datetime ?? a.next_charge_date ?? a.start_date,
-            // Not derivable from membership_instances — unused by the current
-            // playbook rules (they key off dates, not class counts), so this
-            // is a harmless placeholder rather than a real figure.
-            classesUsed: 0,
-            classesIncluded: 999,
-          };
-        }
-        if (active.relationships?.membership_freeze?.data) {
+      const endedAtOf = (a: any): string =>
+        a.cancellation_datetime ?? a.scheduled_end_datetime ?? a.end_date ?? a.calculated_start_datetime ?? a.purchase_date ?? a.start_date ?? 'unknown';
+
+      // Priority 1: a real (non-intro) active membership means they've
+      // converted — "we're good" (per Lucas 2026-08-26), regardless of any
+      // trial or past-lapsed instance also on file.
+      const realActive = instances.find((i) => i.attributes.status === 'active' && !i.attributes.is_intro_offer);
+      if (realActive) {
+        const a = realActive.attributes;
+        if (realActive.relationships?.membership_freeze?.data) {
           // TODO: never observed a real frozen membership — resumesAt unconfirmed.
           return { kind: 'membership_paused', planName: a.membership_name, resumesAt: null };
         }
         return { kind: 'membership_active', planName: a.membership_name, memberSince: a.start_date };
       }
 
-      const mostRecentEnded = [...instances]
-        .filter((i) => i.attributes.status !== 'active')
-        .sort((x, y) => {
-          const xEnd = x.attributes.cancellation_datetime ?? x.attributes.scheduled_end_datetime ?? '';
-          const yEnd = y.attributes.cancellation_datetime ?? y.attributes.scheduled_end_datetime ?? '';
-          return yEnd.localeCompare(xEnd);
-        })[0];
-      if (mostRecentEnded) {
-        const a = mostRecentEnded.attributes;
+      // Priority 2: an active trial/intro-offer instance — still trial_offer
+      // even if its scheduled end date has already passed, since Mariana Tek
+      // doesn't flip status away from 'active' on expiry. playbook.ts uses
+      // the dates to decide "wraps up soon" vs "already expired" copy.
+      const introActive = instances.find((i) => i.attributes.status === 'active' && i.attributes.is_intro_offer);
+      if (introActive) {
+        const a = introActive.attributes;
         return {
-          kind: 'membership_lapsed',
-          planName: a.membership_name,
-          endedAt: a.cancellation_datetime ?? a.scheduled_end_datetime ?? a.start_date,
+          kind: 'trial_offer',
+          offerName: a.membership_name,
+          startDate: a.start_date,
+          endDate: a.scheduled_end_datetime ?? a.next_charge_date ?? a.start_date,
+          // Not derivable from membership_instances — unused by the current
+          // playbook rules (they key off dates, not class counts), so this
+          // is a harmless placeholder rather than a real figure.
+          classesUsed: 0,
+          classesIncluded: 999,
         };
+      }
+
+      // Priority 3: nothing active — most recent instance overall decides
+      // the story. A trial that was explicitly cancelled (not just expired)
+      // still reads as an unconverted trial, not a "lapsed membership".
+      const mostRecent = [...instances].sort((x, y) => endedAtOf(y.attributes).localeCompare(endedAtOf(x.attributes)))[0];
+      if (mostRecent) {
+        const a = mostRecent.attributes;
+        if (a.is_intro_offer) {
+          return {
+            kind: 'trial_offer',
+            offerName: a.membership_name,
+            startDate: a.start_date,
+            endDate: a.scheduled_end_datetime ?? a.next_charge_date ?? endedAtOf(a),
+            classesUsed: 0,
+            classesIncluded: 999,
+          };
+        }
+        return { kind: 'membership_lapsed', planName: a.membership_name, endedAt: endedAtOf(a) };
       }
       return { kind: 'no_active_status' };
     },

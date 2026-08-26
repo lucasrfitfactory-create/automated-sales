@@ -8,6 +8,11 @@ import { Repository } from '../store/repository.js';
 
 const LOOKBACK_DAYS = Number(process.env.ASSESS_LOOKBACK_DAYS ?? 14);
 const STORE_PATH = process.env.STORE_PATH ?? 'data/store.json';
+// Explicit range overrides the rolling "last N days from now" window — for
+// targeting a specific calendar day/range (e.g. "yesterday") rather than a
+// window that always ends at the current moment.
+const EXPLICIT_SINCE = process.env.ASSESS_SINCE; // ISO datetime
+const EXPLICIT_BEFORE = process.env.ASSESS_BEFORE; // ISO datetime
 
 async function main() {
   const locationId = process.env.MARIANA_TEK_LOCATION_ID;
@@ -17,19 +22,27 @@ async function main() {
   const repo = new Repository(STORE_PATH);
 
   const now = new Date();
-  const since = new Date(now);
-  since.setDate(since.getDate() - LOOKBACK_DAYS);
+  let since: Date;
+  let before: Date;
+  if (EXPLICIT_SINCE && EXPLICIT_BEFORE) {
+    since = new Date(EXPLICIT_SINCE);
+    before = new Date(EXPLICIT_BEFORE);
+  } else {
+    since = new Date(now);
+    since.setDate(since.getDate() - LOOKBACK_DAYS);
+    before = now;
+  }
 
   const sessions = await mariana.getClassSessions({
     locationId,
     since: since.toISOString(),
-    before: now.toISOString(),
+    before: before.toISOString(),
   });
 
   const unprocessed = sessions.filter((s) => !repo.isClassProcessed(s.id));
 
   if (unprocessed.length === 0) {
-    console.log(`No unprocessed classes in the last ${LOOKBACK_DAYS} days.`);
+    console.log(`No unprocessed classes between ${since.toISOString()} and ${before.toISOString()}.`);
     return;
   }
 

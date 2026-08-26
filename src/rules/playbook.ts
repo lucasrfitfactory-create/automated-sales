@@ -16,10 +16,26 @@ import type { ProposedAction, Rule } from './types.js';
 //                                                as a fallback if they don't want a membership
 //
 // STILL PLACEHOLDER / not yet confirmed by Lucas: class-pack-running-low,
-// lapsed-membership win-back, and generic-walk-in-with-nothing-on-file. Kept
+// genuine lapsed-real-membership win-back (as opposed to the now-confirmed
+// expired-trial case below), and generic-walk-in-with-nothing-on-file. Kept
 // from the earlier draft so the pipeline still covers those cases, but the
-// triggers/timing/copy need review. Also placeholder: exact class-pack price
+// triggers/timing/copy need review — in particular, how stale a lapsed
+// membership can be before it's not worth a win-back text (a real test run
+// surfaced one 16 months lapsed). Also placeholder: exact class-pack price
 // points (asked Lucas — couldn't scrape the live pricing widget).
+//
+// Confirmed with Lucas 2026-08-26, from a real "yesterday" test run:
+//   - Only 'Group Fitness' classroom classes are in scope — PSC and Refined
+//     Reformer are excluded at the source (see marianaTek/realClient.ts),
+//     not filtered here.
+//   - Expired trials (past their end date but not converted to a real
+//     membership/pack) should still get a win-back message — see the
+//     `daysLeft < 0` branches below — but NOT if they've already converted
+//     (handled in realClient.ts's getMembershipStatus: a real active
+//     membership takes priority over any trial/lapsed data on file).
+//   - ClassPass guest detection (reservation tag "ClassPass Reservation")
+//     confirmed correct against a real booking (Lucas: "Praveen I ... Guest
+//     of ClassPass ... 3rd Class").
 //
 // Cadence (2026-08-25, "should be conversion-oriented, keep what works,
 // adapt what doesn't"): three touches per trial instead of two — a light
@@ -51,6 +67,21 @@ export const PLAYBOOK: Rule[] = [
     const daysLeft = daysBetween(new Date(ctx.status.endDate), ctx.now);
     const daysElapsed = daysBetween(ctx.now, new Date(ctx.status.startDate));
 
+    if (daysLeft < 0) {
+      // Mariana Tek doesn't flip status away from 'active' when a trial's
+      // date passes — so this fires for anyone whose week ended without
+      // converting. Per Lucas (2026-08-26): still reach out, just not with
+      // "wraps up soon" (it already has) — a lower-pressure past-tense ask.
+      const action: ProposedAction = {
+        segmentKey: 'trial_1week_expired',
+        segmentLabel: `${ctx.status.offerName} — expired ${-daysLeft}d ago, no conversion`,
+        channel: 'email',
+        headline: 'Trial expired without converting — win-back',
+        message: `Hey ${ctx.client.firstName} — noticed your one-week trial wrapped up a little while ago and we haven't seen you set up on a membership yet. Still want to keep training with us? Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment — happy to help whenever works, no rush.`,
+        cooldownDays: 14,
+      };
+      return action;
+    }
     if (daysLeft <= 2) {
       const action: ProposedAction = {
         segmentKey: 'trial_1week_convert',
@@ -91,6 +122,20 @@ export const PLAYBOOK: Rule[] = [
     const daysElapsed = daysBetween(ctx.now, new Date(ctx.status.startDate));
     const comeback = isComeback(ctx.status.offerName);
 
+    if (daysLeft < 0) {
+      // Same reasoning as the week-trial expired branch — status stays
+      // 'active' past the real end date, so this catches unconverted
+      // expired trials specifically (not real lapsed memberships).
+      const action: ProposedAction = {
+        segmentKey: 'trial_1month_expired',
+        segmentLabel: `${ctx.status.offerName} — expired ${-daysLeft}d ago, no conversion`,
+        channel: 'email',
+        headline: 'Trial expired without converting — win-back',
+        message: `Hey ${ctx.client.firstName} — ${comeback ? "so glad you were back in class for a bit! " : ''}noticed your month of unlimited classes wrapped up a little while ago and we haven't seen you set up on a membership yet. Still want to keep it going? Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment — happy to help whenever works, no rush.`,
+        cooldownDays: 14,
+      };
+      return action;
+    }
     if (daysLeft <= 3) {
       const action: ProposedAction = {
         segmentKey: 'trial_1month_convert',
