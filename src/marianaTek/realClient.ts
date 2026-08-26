@@ -49,17 +49,30 @@ import type {
 //     'PSC - Personal Strength Coaching' vs 'REFINED Reformer'. Per Lucas
 //     2026-08-26, only 'Group Fitness' classes are in scope (PSC and
 //     Refined Reformer are different products/businesses and must never get
-//     the Fit Factory group-fitness pitch).
+//     the Fit Factory group-fitness pitch). Confirmed this isn't enough on
+//     its own, either — a client can attend a real Group Fitness class
+//     while separately holding a Refined/PSC membership_instance, which
+//     still needs excluding when computing their status (see the
+//     isOtherBusinessProduct filter below).
+//   - Frozen (paused) real memberships: status is literally 'frozen' (not
+//     'active' with a membership_freeze relationship, as first assumed),
+//     and freeze_reactivation_datetime sits right on the instance — no
+//     separate membership_freezes fetch needed. Confirmed against a real
+//     frozen membership (Dylan Trench, 2026-08-26).
+//   - Class packs: GET /api/credit_transactions/?user=<id> — one "grant"
+//     record per pack purchase, identified by remaining_credits_cache !==
+//     null (usage/debit records have it null). transaction_amount = total
+//     credits issued, remaining_credits_cache = live remaining balance,
+//     expiration_datetime = pack expiry. Confirmed against a real example
+//     (Dylan Trench: Mariana Tek's own UI showed "Credit: 5/14. Exp.
+//     9/1/2026"; transaction 67371 had transaction_amount:14,
+//     remaining_credits_cache:5, expiration_datetime:2026-09-01 — exact
+//     match). credit_name is a generic bucket label (e.g. "Complimentary
+//     Classes - Downtown"), not the specific purchased product's marketing
+//     name — good enough to identify/message about, not to quote back
+//     verbatim as "the pack you bought."
 //
 // STILL TODO / UNCONFIRMED:
-//   - Class packs: no class-pack/credit-based resource found yet in this
-//     pass (only membership_instances, which covers trials + real
-//     memberships). getMembershipStatus() below never returns 'class_pack'
-//     as a result — clients on a pack currently fall through to
-//     'no_active_status' until this is found.
-//   - membership_paused: relationships.membership_freeze existing (vs null)
-//     is assumed to mean paused, and resumesAt is left null — never
-//     observed a real frozen membership to confirm the shape.
 //   - Reservation status values other than 'check in' (no-show, cancelled,
 //     waitlisted, etc.) haven't been observed — anything other than
 //     'check in' is currently treated as not-attended.
@@ -226,14 +239,21 @@ export function createRealMarianaTekClient(opts: { apiUrl: string; apiKey: strin
       const realActive = instances.find((i) => i.attributes.status === 'active' && !i.attributes.is_intro_offer);
       if (realActive) {
         const a = realActive.attributes;
-        if (realActive.relationships?.membership_freeze?.data) {
-          // TODO: never observed a real frozen membership — resumesAt unconfirmed.
-          return { kind: 'membership_paused', planName: a.membership_name, resumesAt: null };
-        }
         return { kind: 'membership_active', planName: a.membership_name, memberSince: a.start_date };
       }
 
-      // Priority 2: an active trial/intro-offer instance — still trial_offer
+      // Priority 2: a real (non-intro) FROZEN membership — confirmed
+      // 2026-08-26 that status is literally 'frozen' (not 'active' with a
+      // membership_freeze relationship, as originally assumed), and
+      // freeze_reactivation_datetime is right on the instance. Still counts
+      // as "converted" — they're a real member, just paused.
+      const realFrozen = instances.find((i) => i.attributes.status === 'frozen' && !i.attributes.is_intro_offer);
+      if (realFrozen) {
+        const a = realFrozen.attributes;
+        return { kind: 'membership_paused', planName: a.membership_name, resumesAt: a.freeze_reactivation_datetime ?? null };
+      }
+
+      // Priority 3: an active trial/intro-offer instance — still trial_offer
       // even if its scheduled end date has already passed, since Mariana Tek
       // doesn't flip status away from 'active' on expiry. playbook.ts uses
       // the dates to decide "wraps up soon" vs "already expired" copy.
@@ -253,7 +273,34 @@ export function createRealMarianaTekClient(opts: { apiUrl: string; apiKey: strin
         };
       }
 
-      // Priority 3: nothing active — most recent instance overall decides
+      // Priority 4: an active class pack. Confirmed 2026-08-26 against a
+      // real example (Dylan Trench, "Credit: 5/14. Exp. 9/1/2026" in the
+      // Mariana Tek UI): /api/credit_transactions/?user=<id> has one
+      // "grant" record per pack purchase — remaining_credits_cache !== null
+      // marks a grant (vs. a per-class usage debit, which has it null);
+      // transaction_amount is the total credits issued, remaining_credits_cache
+      // is the live remaining balance, expiration_datetime is the pack's
+      // expiry. credit_name is a generic bucket label (e.g. "Complimentary
+      // Classes - Downtown"), not the specific purchased product name — good
+      // enough to identify it as a pack, not necessarily its marketing name.
+      const creditData = await get<JsonApiList>('/api/credit_transactions/', { user: clientId, page_size: '100' });
+      const now = new Date().toISOString();
+      const activePack = creditData.data
+        .filter((t) => t.attributes.remaining_credits_cache !== null)
+        .filter((t) => (t.attributes.expiration_datetime ?? '9999') > now)
+        .sort((x, y) => (x.attributes.expiration_datetime ?? '').localeCompare(y.attributes.expiration_datetime ?? ''))[0];
+      if (activePack && activePack.attributes.remaining_credits_cache > 0) {
+        const a = activePack.attributes;
+        return {
+          kind: 'class_pack',
+          packName: a.credit_name,
+          classesRemaining: a.remaining_credits_cache,
+          classesTotal: a.transaction_amount,
+          expiresAt: a.expiration_datetime,
+        };
+      }
+
+      // Priority 5: nothing active — most recent instance overall decides
       // the story. A trial that was explicitly cancelled (not just expired)
       // still reads as an unconverted trial, not a "lapsed membership".
       const mostRecent = [...instances].sort((x, y) => endedAtOf(y.attributes).localeCompare(endedAtOf(x.attributes)))[0];
