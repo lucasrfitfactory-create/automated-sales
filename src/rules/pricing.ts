@@ -22,6 +22,12 @@ export function formatWeeklyUnlimitedPricing(): string {
   return WEEKLY_UNLIMITED_TIERS.map((t) => `$${t.pricePerWeek}/week (${t.commitment})`).join(', ');
 }
 
+/** Short anchor for the initial text — the one number that makes it an easy yes, not the full tier breakdown. */
+export function formatWeeklyUnlimitedCheapest(): string {
+  const cheapest = [...WEEKLY_UNLIMITED_TIERS].sort((a, b) => a.pricePerWeek - b.pricePerWeek)[0]!;
+  return `as low as $${cheapest.pricePerWeek}/week`;
+}
+
 export interface ClassPack {
   name: string;
   price: number;
@@ -65,4 +71,10 @@ export function isClassPackSaleActive(now: Date): boolean {
 export function formatClassPackSalePitch(): string {
   const s = CLASS_PACK_SALE_20;
   return `our Class Pack Sale — ${s.classes} classes for $${s.price} (was $${s.wasPrice}, just $${s.perClass}/class), no commitment — but it ends August 31: ${CLASS_PACK_SALE_URL}`;
+}
+
+/** Short anchor for the initial text — the headline savings number plus the link, so it's a one-click yes. Callers supply "Class Pack Sale" themselves so it isn't repeated. */
+export function formatClassPackSaleTeaser(): string {
+  const maxSavings = CLASS_PACK_SALE_20.wasPrice - CLASS_PACK_SALE_20.price;
+  return `save up to $${maxSavings}, ends Aug 31: ${CLASS_PACK_SALE_URL}`;
 }
