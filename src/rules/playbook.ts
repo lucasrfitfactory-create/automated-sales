@@ -1,4 +1,4 @@
-import { formatWeeklyUnlimitedPricing, CLASSPASS_ONE_MONTH_PRICE } from './pricing.js';
+import { formatWeeklyUnlimitedPricing, formatClassPackSalePitch, isClassPackSaleActive, CLASSPASS_ONE_MONTH_PRICE } from './pricing.js';
 import type { ProposedAction, Rule } from './types.js';
 
 // ============================================================================
@@ -20,8 +20,17 @@ import type { ProposedAction, Rule } from './types.js';
 // from the earlier draft so the pipeline still covers those cases, but the
 // triggers/timing/copy need review — in particular, how stale a lapsed
 // membership can be before it's not worth a win-back text (a real test run
-// surfaced one 16 months lapsed). Also placeholder: exact class-pack price
-// points (asked Lucas — couldn't scrape the live pricing widget).
+// surfaced one 16 months lapsed). Class-pack pricing is now real (see
+// pricing.ts's CLASS_PACKS, confirmed against the live site) — just needs
+// Lucas's real trigger/copy for the non-sale, non-expiring baseline case.
+//
+// Class Pack Sale push (Lucas, 2026-08-26): while the flash sale is active
+// (isClassPackSaleActive() in pricing.ts, auto-expires after Aug 31 — no
+// manual revert needed), ClassPass-related segments (Path 0, Path 3) and
+// the class-pack-low/expiring rule lead with the sale instead of the
+// default copy. "Expiring soon" now also covers pack expiration DATE, not
+// just low remaining-class count — someone with 8 classes left but a pack
+// expiring in a week is a real signal too.
 //
 // Confirmed with Lucas 2026-08-26, from a real "yesterday" test run:
 //   - Only 'Group Fitness' classroom classes are in scope — PSC and Refined
@@ -93,14 +102,17 @@ export const PLAYBOOK: Rule[] = [
     const daysLeft = daysBetween(new Date(ctx.status.endDate), ctx.now);
     if (daysLeft >= 0) return null; // trial still technically running — let Path 1/2 handle it normally
     const frequent = ctx.attendanceLast30Days >= FREQUENT_THRESHOLD;
+    const saleOn = isClassPackSaleActive(ctx.now);
     const action: ProposedAction = {
       segmentKey: 'classpass_rebook_after_trial',
       segmentLabel: `Back on ClassPass after ${ctx.status.offerName} expired ${-daysLeft}d ago${frequent ? ` (${ctx.attendanceLast30Days}x last 30d)` : ''}`,
       channel: 'email',
       headline: 'ClassPass rebooker post-trial — pitch membership directly',
       message: frequent
-        ? `Hey ${ctx.client.firstName} — noticed you're back to booking through ClassPass after your trial wrapped up, and you're in here a lot (${ctx.attendanceLast30Days}x this month!). Since you're clearly loving it, let's just get you on a membership — Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING}. Want me to set that up for you?`
-        : `Hey ${ctx.client.firstName} — noticed you're back to booking through ClassPass after your trial wrapped up. Whenever you're ready to make Fit Factory a regular thing, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) is the way to go. Want me to set that up for you?`,
+        ? `Hey ${ctx.client.firstName} — noticed you're back to booking through ClassPass after your trial wrapped up, and you're in here a lot (${ctx.attendanceLast30Days}x this month!). Since you're clearly loving it, let's just get you on a membership — Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING}.${saleOn ? ` Or if you're not ready to commit yet, ${formatClassPackSalePitch()}.` : ''} Want me to set that up for you?`
+        : saleOn
+          ? `Hey ${ctx.client.firstName} — noticed you're back to booking through ClassPass after your trial wrapped up. We've actually got ${formatClassPackSalePitch()}. Or if you're ready to go all-in, Weekly Unlimited is ${WEEKLY_UNLIMITED_PRICING}. Want me to set one up for you?`
+          : `Hey ${ctx.client.firstName} — noticed you're back to booking through ClassPass after your trial wrapped up. Whenever you're ready to make Fit Factory a regular thing, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) is the way to go. Want me to set that up for you?`,
       cooldownDays: 14,
     };
     return action;
@@ -221,34 +233,47 @@ export const PLAYBOOK: Rule[] = [
     if (ctx.rosterEntry.bookingSource !== 'classpass') return null;
     if (ctx.status.kind !== 'no_active_status') return null; // already has a direct FF status — let that rule handle it
     const frequent = ctx.attendanceLast30Days >= FREQUENT_THRESHOLD;
+    const saleOn = isClassPackSaleActive(ctx.now);
     const action: ProposedAction = {
       segmentKey: 'classpass_guest_pitch',
-      segmentLabel: `ClassPass guest — no direct Fit Factory purchase${frequent ? ` (${ctx.attendanceLast30Days}x last 30d)` : ''}`,
+      segmentLabel: `ClassPass guest — no direct Fit Factory purchase${frequent ? ` (${ctx.attendanceLast30Days}x last 30d)` : ''}${saleOn ? ' [class pack sale push]' : ''}`,
       channel: 'email',
-      headline: 'ClassPass guest — pitch membership, $99 pass as the one alternative',
+      headline: saleOn ? 'ClassPass guest — push the Class Pack Sale (ends Aug 31)' : 'ClassPass guest — pitch membership, $99 pass as the one alternative',
       message: frequent
-        ? `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass — you've been in ${ctx.attendanceLast30Days} times over the last month! Since you're clearly coming in regularly, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) would make it a lot simpler than booking one-off each time. Want me to set that up for you?`
-        : `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass! If you want to make Fit Factory a regular thing, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) is the way to go — or if you'd rather ease in first, we've got a $${CLASSPASS_ONE_MONTH_PRICE} one-month unlimited pass. Whichever makes more sense for you, want me to set it up?`,
+        ? `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass — you've been in ${ctx.attendanceLast30Days} times over the last month! Since you're clearly coming in regularly, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) would make it a lot simpler than booking one-off each time.${saleOn ? ` If you're not ready to commit yet, ${formatClassPackSalePitch()}.` : ''} Want me to set that up for you?`
+        : saleOn
+          ? `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass! We've actually got ${formatClassPackSalePitch()}. Or if you want to make Fit Factory a regular thing, Weekly Unlimited is ${WEEKLY_UNLIMITED_PRICING}. Want me to set one up for you?`
+          : `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass! If you want to make Fit Factory a regular thing, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) is the way to go — or if you'd rather ease in first, we've got a $${CLASSPASS_ONE_MONTH_PRICE} one-month unlimited pass. Whichever makes more sense for you, want me to set it up?`,
       cooldownDays: 7,
     };
     return action;
   },
 
-  // PLACEHOLDER — class pack running low or expired.
+  // PLACEHOLDER — class pack running low OR expiring soon (by date, even
+  // with classes still left — those unused credits are about to be lost,
+  // which is its own reason to reach out, separate from "running low").
   (ctx) => {
     if (ctx.status.kind !== 'class_pack') return null;
-    if (ctx.status.classesRemaining > 1) return null;
-    const expired = ctx.status.classesRemaining <= 0;
+    const daysUntilExpiry = ctx.status.expiresAt ? daysBetween(new Date(ctx.status.expiresAt), ctx.now) : null;
+    const usedUp = ctx.status.classesRemaining <= 0;
+    const runningLow = !usedUp && ctx.status.classesRemaining <= 1;
+    const expiringSoon = !usedUp && daysUntilExpiry !== null && daysUntilExpiry >= 0 && daysUntilExpiry <= 14;
+    if (!usedUp && !runningLow && !expiringSoon) return null;
+
+    const saleOn = isClassPackSaleActive(ctx.now);
+    const situation = usedUp
+      ? `looks like your ${ctx.status.packName} is all used up!`
+      : expiringSoon
+        ? `heads up — your ${ctx.status.packName} expires in ${daysUntilExpiry}d with ${ctx.status.classesRemaining} class${ctx.status.classesRemaining === 1 ? '' : 'es'} still on it. Don't want you to lose those!`
+        : `you're down to your last class on your ${ctx.status.packName}.`;
     const action: ProposedAction = {
-      segmentKey: expired ? 'class_pack_expired' : 'class_pack_low',
-      segmentLabel: expired
-        ? `${ctx.status.packName} — used up`
-        : `${ctx.status.packName} — ${ctx.status.classesRemaining} left`,
+      segmentKey: usedUp ? 'class_pack_expired' : expiringSoon ? 'class_pack_expiring_soon' : 'class_pack_low',
+      segmentLabel: `${ctx.status.packName} — ${usedUp ? 'used up' : expiringSoon ? `expires ${daysUntilExpiry}d, ${ctx.status.classesRemaining} left` : `${ctx.status.classesRemaining} left`}${saleOn ? ' [sale push]' : ''}`,
       channel: 'email',
-      headline: expired ? 'Class pack used up — re-engage' : 'Class pack almost out — upsell',
-      message: expired
-        ? `Hey ${ctx.client.firstName} — looks like your ${ctx.status.packName} is all used up! Want another pack, or would a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) make more sense so you're not thinking about it each time? Either way, want me to set that up for you?`
-        : `Hey ${ctx.client.firstName} — you're down to your last class on your ${ctx.status.packName}. Want another pack, or would a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) make more sense at this point? Want me to set that up for you?`,
+      headline: expiringSoon ? 'Class pack expiring soon — renew before credits are lost' : usedUp ? 'Class pack used up — re-engage' : 'Class pack almost out — upsell',
+      message: saleOn
+        ? `Hey ${ctx.client.firstName} — ${situation} We've got ${formatClassPackSalePitch()} — want me to set you up before it ends?`
+        : `Hey ${ctx.client.firstName} — ${situation} Want another pack, or would a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) make more sense so you're not thinking about it each time? Want me to set that up for you?`,
       cooldownDays: 5,
     };
     return action;

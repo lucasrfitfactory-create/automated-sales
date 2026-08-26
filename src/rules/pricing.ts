@@ -31,8 +31,8 @@ export interface ClassPack {
 
 export const CLASS_PACKS: ClassPack[] = [
   { name: '5 Class Pack', price: 159, classes: 5, validity: '6 months' },
-  { name: '10 Class Pack (flash sale through Aug 31)', price: 199, classes: 10, validity: '6 months' },
-  { name: '20 Class Pack (flash sale through Aug 31)', price: 349, classes: 20, validity: '6 months' },
+  { name: '10 Class Pack (flash sale through Aug 31)', price: 199, classes: 10, validity: '3 months' },
+  { name: '20 Class Pack (flash sale through Aug 31)', price: 349, classes: 20, validity: '3 months' },
   { name: '40 Class Pack', price: 999, classes: 40, validity: '6 months' },
 ];
 
@@ -47,3 +47,22 @@ export function formatClassPackTeaser(): string {
 }
 
 export const CLASSPASS_ONE_MONTH_PRICE = 99;
+
+// Class Pack Sale — confirmed with Lucas 2026-08-26 from the live site
+// (fitfactoryfitness.com/class-pack-deal). Ends midnight Aug 31 Toronto
+// time. isClassPackSaleActive() gates the promo copy in playbook.ts so it
+// stops firing on its own after the deadline — no manual revert needed.
+export const CLASS_PACK_SALE_URL = 'https://www.fitfactoryfitness.com/class-pack-deal';
+export const CLASS_PACK_SALE_END_ISO = '2026-09-01T04:00:00Z'; // midnight Aug 31 EDT (UTC-4)
+export const CLASS_PACK_SALE_20 = { price: 349, wasPrice: 549, classes: 20, perClass: 17.45 };
+export const CLASS_PACK_SALE_10 = { price: 199, wasPrice: 299, classes: 10, perClass: 19.9 };
+
+export function isClassPackSaleActive(now: Date): boolean {
+  return now.toISOString() < CLASS_PACK_SALE_END_ISO;
+}
+
+/** The lead pitch for the active flash sale — 20-pack (best value), with urgency and the direct purchase link. */
+export function formatClassPackSalePitch(): string {
+  const s = CLASS_PACK_SALE_20;
+  return `our Class Pack Sale — ${s.classes} classes for $${s.price} (was $${s.wasPrice}, just $${s.perClass}/class), no commitment — but it ends August 31: ${CLASS_PACK_SALE_URL}`;
+}
