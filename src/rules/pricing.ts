@@ -42,18 +42,6 @@ export const CLASS_PACKS: ClassPack[] = [
   { name: '40 Class Pack', price: 999, classes: 40, validity: '6 months' },
 ];
 
-export function formatClassPackOptions(): string {
-  return CLASS_PACKS.map((p) => `${p.name} — $${p.price} (${p.classes} classes)`).join(', ');
-}
-
-/** Short, conversational mention for drafted messages — full breakdown belongs in a follow-up, not the first text. */
-export function formatClassPackTeaser(): string {
-  const cheapest = CLASS_PACKS[0]!;
-  return `class packs starting at $${cheapest.price} (${cheapest.classes} classes)`;
-}
-
-export const CLASSPASS_ONE_MONTH_PRICE = 99;
-
 // Class Pack Sale — confirmed with Lucas 2026-08-26 from the live site
 // (fitfactoryfitness.com/class-pack-deal). Ends midnight Aug 31 Toronto
 // time. isClassPackSaleActive() gates the promo copy in playbook.ts so it
@@ -70,7 +58,7 @@ export function isClassPackSaleActive(now: Date): boolean {
 /** The lead pitch for the active flash sale — 20-pack (best value), with urgency and the direct purchase link. */
 export function formatClassPackSalePitch(): string {
   const s = CLASS_PACK_SALE_20;
-  return `our Class Pack Sale — ${s.classes} classes for $${s.price} (was $${s.wasPrice}, just $${s.perClass}/class), no commitment — but it ends August 31: ${CLASS_PACK_SALE_URL}`;
+  return `our Class Pack Sale: ${s.classes} classes for $${s.price} (was $${s.wasPrice}, just $${s.perClass}/class), no commitment, but it ends August 31: ${CLASS_PACK_SALE_URL}`;
 }
 
 /** Short anchor for the initial text — the headline savings number plus the link, so it's a one-click yes. Callers supply "Class Pack Sale" themselves so it isn't repeated. */
