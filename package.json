@@ -9,6 +9,7 @@
     "outcome": "tsx src/cli/outcome.ts",
     "send": "tsx src/cli/send.ts",
     "lookup": "tsx src/cli/lookup.ts",
+    "check-replies": "tsx src/cli/check-replies.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

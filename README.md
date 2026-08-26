@@ -115,6 +115,25 @@ This is manual/assisted for now (I read Lucas's decisions and record them) —
 automating the recap-reply -> outcome pipeline is a later step, but the data
 model is already there.
 
+## Sales processing (confirmed 2026-08-26: manual, permanently)
+
+Mariana Tek has no purchase-creation API (confirmed by their support team) —
+membership sales only happen through the POS checkout flow in their Admin
+dashboard, which requires manually typing card details. Separately, browser
+automation into that same admin domain is blocked at the platform level for
+this session regardless of which account is used. Between those two facts,
+Claude will never be the one directly processing a sale in Mariana Tek.
+
+What Claude does instead: `npm run check-replies` pulls every touch that's
+actually been sent (`status: 'sent'`) and surfaces any client reply since,
+via HighLevel's conversation history. It deliberately does NOT try to
+auto-classify a reply as a "yes" — freeform text is too varied to trust a
+keyword match with something this consequential. Instead, when this is run,
+Claude reads the replies and flags anything that looks like agreement as
+**IMPORTANT** when reporting back, so Lucas knows exactly which sales to go
+process manually. Not scheduled/continuous yet — run on demand until a
+periodic check is wired up.
+
 ## Next steps
 
 - Get real trigger/copy details for class-pack-low (now that packs are
@@ -124,8 +143,7 @@ model is already there.
   placeholders in `src/rules/playbook.ts`.
 - Push this repo to a remote (currently local-only, no git remote
   configured) if Lucas wants it backed up/shareable.
-- Phase 2: Mariana Tek write access to process approved membership sales
-  directly (currently out of scope — sales still need to be entered in
-  Mariana Tek manually even after a client agrees).
-- Phase 3: feed real conversion outcomes back through `npm run outcome` and
-  start actually rewriting playbook rules based on `npm run stats`.
+- Wire `npm run check-replies` into a scheduled/periodic check instead of
+  on-demand only, so IMPORTANT flags surface without Lucas having to ask.
+- Feed real conversion outcomes back through `npm run outcome` and start
+  actually rewriting playbook rules based on `npm run stats`.
