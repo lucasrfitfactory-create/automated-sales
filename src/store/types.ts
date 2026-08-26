@@ -16,6 +16,15 @@ export interface TouchLogEntry {
   recipient: { firstName: string; lastName: string; email: string | null; phone: string | null };
   headline: string;
   message: string;
+  /** Email fallback if this touch (always text, when set) gets no reply — checked by `npm run check-replies`. */
+  followUp?: {
+    channel: 'email';
+    headline: string;
+    message: string;
+    afterDays: number;
+    /** Set once the follow-up itself has been proposed, so it's never proposed twice for the same original touch. */
+    proposedTouchId?: string;
+  };
 }
 
 export interface Store {

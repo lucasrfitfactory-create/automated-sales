@@ -49,6 +49,9 @@ export function buildRecapText(items: RecapItem[]): string {
         lines.push(`  • ${name} — ${item.action.segmentLabel}`);
         lines.push(`      Proposed: ${item.action.channel.toUpperCase()} — ${item.action.headline}`);
         lines.push(`      Draft: "${item.action.message}"`);
+        if (item.action.followUp) {
+          lines.push(`      If no reply in ${item.action.followUp.afterDays}d: EMAIL follow-up — "${item.action.followUp.message}"`);
+        }
       } else if (item.skippedReason) {
         lines.push(`  • ${name} — ${item.skippedReason}`);
       } else {
@@ -68,17 +71,18 @@ function escapeCell(s: string): string {
 
 /** GFM markdown table — meant to be pasted directly into chat. */
 export function buildRecapTable(items: RecapItem[]): string {
-  const header = '| Class | Client | Status | Action | Draft |\n|---|---|---|---|---|';
+  const header = '| Class | Client | Status | Action | Draft | Follow-up |\n|---|---|---|---|---|---|';
   const rows = items.map((item) => {
     const cls = `${item.classSession.className} (${new Date(item.classSession.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
     const name = `${item.client.firstName} ${item.client.lastName}`;
     if (item.action) {
-      return `| ${cls} | ${name} | ${escapeCell(item.action.segmentLabel)} | **${item.action.channel.toUpperCase()}**: ${escapeCell(item.action.headline)} | ${escapeCell(item.action.message)} |`;
+      const followUpCell = item.action.followUp ? `${item.action.followUp.channel.toUpperCase()} after ${item.action.followUp.afterDays}d` : '—';
+      return `| ${cls} | ${name} | ${escapeCell(item.action.segmentLabel)} | **${item.action.channel.toUpperCase()}**: ${escapeCell(item.action.headline)} | ${escapeCell(item.action.message)} | ${followUpCell} |`;
     }
     if (item.skippedReason) {
-      return `| ${cls} | ${name} | ${escapeCell(item.skippedReason)} | _skipped (cooldown)_ | — |`;
+      return `| ${cls} | ${name} | ${escapeCell(item.skippedReason)} | _skipped (cooldown)_ | — | — |`;
     }
-    return `| ${cls} | ${name} | ${escapeCell(describeStatus(item.status))} | _no action needed_ | — |`;
+    return `| ${cls} | ${name} | ${escapeCell(describeStatus(item.status))} | _no action needed_ | — | — |`;
   });
   return [header, ...rows].join('\n');
 }

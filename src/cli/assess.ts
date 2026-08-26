@@ -94,6 +94,7 @@ async function main() {
         recipient: { firstName: client.firstName, lastName: client.lastName, email: client.email, phone: client.phone },
         headline: action.headline,
         message: action.message,
+        followUp: action.followUp ? { ...action.followUp } : undefined,
       });
     }
     repo.markClassProcessed(session.id);

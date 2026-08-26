@@ -40,6 +40,13 @@ export class Repository {
     return this.store.touchLog;
   }
 
+  /** Marks a touch's follow-up as already queued, so `npm run check-replies` never proposes the same follow-up twice. */
+  markFollowUpProposed(touchId: string, proposedTouchId: string): void {
+    const entry = this.store.touchLog.find((t) => t.id === touchId);
+    if (!entry?.followUp) throw new Error(`touch has no follow-up to mark: ${touchId}`);
+    entry.followUp.proposedTouchId = proposedTouchId;
+  }
+
   save(): void {
     saveStore(this.path, this.store);
   }
