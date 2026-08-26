@@ -9,18 +9,19 @@ that specific message through HighLevel.
 ## Status
 
 - **Mariana Tek**: **live** — API access came through 2026-08-26, and the
-  real client has now been validated against three full real "yesterday"
-  recap runs (214→158→157 real attendees), each surfacing and fixing a real
-  bug: wrong-business pitches (Refined Reformer/PSC products bleeding into
-  the Fit Factory playbook — fixed two ways, see `realClient.ts`), and
-  expired trials being misread as generic lapsed-membership win-backs
-  instead of their own segment. See its top comment for everything
-  confirmed empirically (their docs site stays gated even with the key).
-  Two known gaps remain: class packs aren't detected yet (no pack/credit
-  resource found — those clients read as `no_active_status`, likely
-  inflating that bucket), and `membership_paused` is unverified (never
-  observed a real frozen membership). `MARIANA_TEK_MODE=real` is set in
-  `.env`; flip back to `mock` to iterate against safe seeded data instead.
+  real client has been validated against five full real "yesterday" recap
+  runs (214→158→157→157→157 real attendees), each surfacing and fixing a
+  real bug: wrong-business pitches (Refined Reformer/PSC products bleeding
+  into the Fit Factory playbook), expired trials misread as generic
+  lapsed-membership win-backs, frozen real memberships misread as lapsed
+  (status is literally `'frozen'`, not `'active'`), class packs not
+  detected at all, and — the last one — the recap itself showing the same
+  generic "no active offer/pack" label for every no-action row regardless
+  of the real reason, which was hiding that detection was mostly already
+  working. All fixed and reverified; see `realClient.ts`'s top comment for
+  everything confirmed empirically (their docs site stays gated even with
+  the key). `MARIANA_TEK_MODE=real` is set in `.env`; flip back to `mock`
+  to iterate against safe seeded data instead.
 - **Rules playbook** (`src/rules/playbook.ts`): the 3 confirmed paths ($39
   1-week trial, $99 1-month trial/Comeback/ClassPass-purchase, ClassPass
   guest booking) are real, with a 3-touch conversion-oriented cadence
@@ -116,13 +117,13 @@ model is already there.
 
 ## Next steps
 
-- Get real trigger/copy details for class-pack-low, genuine
-  lapsed-real-membership win-back (including a staleness cutoff), and
-  generic-walk-in segments to replace their placeholders in
-  `src/rules/playbook.ts`.
-- Find the real class-pack/credit resource in Mariana Tek's API (not yet
-  located — `getMembershipStatus` never returns `class_pack` against real
-  data today) and confirm `membership_paused`'s real shape.
+- Get real trigger/copy details for class-pack-low (now that packs are
+  detected, `classesRemaining` is real — just needs Lucas's real
+  threshold/copy), genuine lapsed-real-membership win-back (including a
+  staleness cutoff), and generic-walk-in segments to replace their
+  placeholders in `src/rules/playbook.ts`.
+- Push this repo to a remote (currently local-only, no git remote
+  configured) if Lucas wants it backed up/shareable.
 - Phase 2: Mariana Tek write access to process approved membership sales
   directly (currently out of scope — sales still need to be entered in
   Mariana Tek manually even after a client agrees).
