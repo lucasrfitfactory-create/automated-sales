@@ -60,7 +60,35 @@ function isComeback(offerName: string): boolean {
   return /comeback/i.test(offerName);
 }
 
+const FREQUENT_THRESHOLD = 3; // classes in the last 30 days — "coming a lot" per Lucas, 2026-08-26
+
 export const PLAYBOOK: Rule[] = [
+  // Path 0: ClassPass rebooker — bought a Fit Factory trial before, it
+  // expired without converting, and they're back booking through ClassPass.
+  // Common pattern (Lucas, 2026-08-26, re: Lianna Marraffino): call it out
+  // directly rather than sending the generic "expired trial" or generic
+  // "ClassPass guest" copy — neither acknowledges they've already tried us
+  // and are still coming back. Must come before Path 2 (which would
+  // otherwise catch this via its own daysLeft<0 branch with generic copy).
+  (ctx) => {
+    if (ctx.rosterEntry.bookingSource !== 'classpass') return null;
+    if (ctx.status.kind !== 'trial_offer') return null;
+    const daysLeft = daysBetween(new Date(ctx.status.endDate), ctx.now);
+    if (daysLeft >= 0) return null; // trial still technically running — let Path 1/2 handle it normally
+    const frequent = ctx.attendanceLast30Days >= FREQUENT_THRESHOLD;
+    const action: ProposedAction = {
+      segmentKey: 'classpass_rebook_after_trial',
+      segmentLabel: `Back on ClassPass after ${ctx.status.offerName} expired ${-daysLeft}d ago${frequent ? ` (${ctx.attendanceLast30Days}x last 30d)` : ''}`,
+      channel: 'email',
+      headline: 'ClassPass rebooker post-trial — pitch membership directly',
+      message: frequent
+        ? `Hey ${ctx.client.firstName} — noticed you're back to booking through ClassPass after your trial wrapped up, and you're in here a lot (${ctx.attendanceLast30Days}x this month!). Since you're clearly loving it, want to just get you on a membership? It'd probably work out cheaper than ClassPass per-visit too — Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING}, happy to set it up whenever.`
+        : `Hey ${ctx.client.firstName} — noticed you're back to booking through ClassPass after your trial wrapped up. Whenever you're ready to make Fit Factory a regular thing, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) is worth a look — want me to walk you through it?`,
+      cooldownDays: 14,
+    };
+    return action;
+  },
+
   // Path 1: $39 trial, 1 week unlimited. Three touches: welcome -> mid-trial pricing tease -> final push.
   (ctx) => {
     if (ctx.status.kind !== 'trial_offer' || !isWeekTrial(ctx.status.offerName)) return null;
@@ -175,12 +203,15 @@ export const PLAYBOOK: Rule[] = [
   (ctx) => {
     if (ctx.rosterEntry.bookingSource !== 'classpass') return null;
     if (ctx.status.kind !== 'no_active_status') return null; // already has a direct FF status — let that rule handle it
+    const frequent = ctx.attendanceLast30Days >= FREQUENT_THRESHOLD;
     const action: ProposedAction = {
       segmentKey: 'classpass_guest_pitch',
-      segmentLabel: 'ClassPass guest — no direct Fit Factory purchase',
+      segmentLabel: `ClassPass guest — no direct Fit Factory purchase${frequent ? ` (${ctx.attendanceLast30Days}x last 30d)` : ''}`,
       channel: 'email',
       headline: 'ClassPass guest — pitch membership, fallback to $99 pass or packages',
-      message: `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass! If you want to make Fit Factory a regular thing, a Weekly Unlimited membership is the best value (${WEEKLY_UNLIMITED_PRICING}). If you'd rather ease in, we've also got a $${CLASSPASS_ONE_MONTH_PRICE} one-month unlimited pass, or ${formatClassPackTeaser()} if a membership isn't the right fit yet. Happy to walk you through options.`,
+      message: frequent
+        ? `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass — you've been in ${ctx.attendanceLast30Days} times over the last month! At that rate, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) would likely save you money versus paying per class through ClassPass. Want me to set you up? If you'd rather ease in, we've also got a $${CLASSPASS_ONE_MONTH_PRICE} one-month unlimited pass, or ${formatClassPackTeaser()}.`
+        : `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass! If you want to make Fit Factory a regular thing, a Weekly Unlimited membership is the best value (${WEEKLY_UNLIMITED_PRICING}). If you'd rather ease in, we've also got a $${CLASSPASS_ONE_MONTH_PRICE} one-month unlimited pass, or ${formatClassPackTeaser()} if a membership isn't the right fit yet. Happy to walk you through options.`,
       cooldownDays: 7,
     };
     return action;
@@ -221,16 +252,24 @@ export const PLAYBOOK: Rule[] = [
   },
 
   // PLACEHOLDER — walk-in/drop-in with nothing on file and not a ClassPass guest.
+  // Per Lucas 2026-08-26: someone attending frequently with no membership/pack
+  // is a stronger, more specific signal than a first-time walk-in — pitch the
+  // membership directly instead of the generic trial offer.
   (ctx) => {
     if (ctx.status.kind !== 'no_active_status') return null;
     if (ctx.rosterEntry.bookingSource === 'classpass') return null; // handled above
+    const frequent = ctx.attendanceLast30Days >= FREQUENT_THRESHOLD;
     const action: ProposedAction = {
-      segmentKey: 'no_status_intro_pitch',
-      segmentLabel: 'No active offer/membership/pack on file',
+      segmentKey: frequent ? 'no_status_frequent_pitch_membership' : 'no_status_intro_pitch',
+      segmentLabel: frequent
+        ? `No membership/pack on file, but ${ctx.attendanceLast30Days}x in the last month`
+        : 'No active offer/membership/pack on file',
       channel: 'email',
-      headline: 'Drop-in with nothing on file — pitch trial offer',
-      message: `Hey ${ctx.client.firstName}, thanks for dropping into class! If you want to try a few more, we've got a $39 one-week unlimited trial that's a great way to explore the studio. Want the details?`,
-      cooldownDays: 10,
+      headline: frequent ? 'Frequent drop-in, no membership — pitch membership directly' : 'Drop-in with nothing on file — pitch trial offer',
+      message: frequent
+        ? `Hey ${ctx.client.firstName} — noticed you've been in ${ctx.attendanceLast30Days} times over the last month without a membership or pack. At that pace, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) would likely work out cheaper for you. Want me to set you up?`
+        : `Hey ${ctx.client.firstName}, thanks for dropping into class! If you want to try a few more, we've got a $39 one-week unlimited trial that's a great way to explore the studio. Want the details?`,
+      cooldownDays: frequent ? 7 : 10,
     };
     return action;
   },

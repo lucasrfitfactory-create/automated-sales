@@ -6,6 +6,8 @@ export interface RuleContext {
   classSession: MtClassSession;
   rosterEntry: MtRosterEntry;
   now: Date;
+  /** Classes checked into in the last 30 days — "are they coming a lot?" for personalizing the ask. */
+  attendanceLast30Days: number;
 }
 
 export interface ProposedAction {

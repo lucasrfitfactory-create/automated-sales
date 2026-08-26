@@ -52,12 +52,15 @@ async function main() {
     const roster = await mariana.getRoster(session.id);
     for (const entry of roster) {
       if (!entry.attended) continue;
-      const [client, status] = await Promise.all([
+      const attendanceSince = new Date(now);
+      attendanceSince.setDate(attendanceSince.getDate() - 30);
+      const [client, status, attendanceLast30Days] = await Promise.all([
         mariana.getClient(entry.clientId),
         mariana.getMembershipStatus(entry.clientId),
+        mariana.getRecentAttendanceCount(entry.clientId, attendanceSince.toISOString()),
       ]);
 
-      const action = evaluate({ client, status, classSession: session, rosterEntry: entry, now }, PLAYBOOK);
+      const action = evaluate({ client, status, classSession: session, rosterEntry: entry, now, attendanceLast30Days }, PLAYBOOK);
 
       if (!action) {
         items.push({ client, classSession: session, status, action: null });

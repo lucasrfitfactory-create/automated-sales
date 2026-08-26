@@ -332,5 +332,17 @@ export function createRealMarianaTekClient(opts: { apiUrl: string; apiKey: strin
       }
       return { kind: 'no_active_status' };
     },
+
+    async getRecentAttendanceCount(clientId, sinceIso) {
+      // TODO: reservations aren't confirmed to come back in a reliable
+      // chronological order (unlike class_sessions, which does), so this
+      // takes the first page (most recent activity, going by observed data)
+      // and counts check-ins within the window from there. Good enough for
+      // a 30-day-ish window against a typical attendee; could undercount
+      // someone with 100+ reservations of other statuses (cancellations
+      // etc.) ahead of their actual check-ins in the same page.
+      const d = await get<JsonApiList>('/api/reservations/', { user: clientId, page_size: '100' });
+      return d.data.filter((r) => r.attributes.status === 'check in' && (r.attributes.check_in_date ?? '') >= sinceIso).length;
+    },
   };
 }

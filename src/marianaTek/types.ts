@@ -73,4 +73,6 @@ export interface MarianaTekClient {
   getRoster(classSessionId: string): Promise<MtRosterEntry[]>;
   getClient(clientId: string): Promise<MtClient>;
   getMembershipStatus(clientId: string): Promise<MtMembershipStatus>;
+  /** How many classes this client has checked into since `sinceIso` — the "are they coming a lot?" signal for personalizing outreach. */
+  getRecentAttendanceCount(clientId: string, sinceIso: string): Promise<number>;
 }

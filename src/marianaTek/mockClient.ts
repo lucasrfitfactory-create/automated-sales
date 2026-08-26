@@ -22,6 +22,7 @@ const CLIENTS: MtClient[] = [
   { id: 'c8', firstName: 'Jack', lastName: 'Sullivan', email: 'jack.sullivan@example.com', phone: '4165550108' },
   { id: 'c9', firstName: 'Priya', lastName: 'Nair', email: 'priya.nair@example.com', phone: '4165550109' },
   { id: 'c10', firstName: 'Marcus', lastName: 'Diallo', email: 'marcus.diallo@example.com', phone: '4165550110' },
+  { id: 'c11', firstName: 'Lianna', lastName: 'Marraffino', email: 'lianna.m@example.com', phone: '4165550111' },
 ];
 
 function daysAgo(n: number): string {
@@ -52,6 +53,23 @@ const MEMBERSHIP_STATUS: Record<string, MtMembershipStatus> = {
   c8: { kind: 'no_active_status' },
   // ClassPass guest, no direct Mariana Tek purchase on file.
   c10: { kind: 'no_active_status' },
+  // Used the $99 ClassPass trial, it expired without converting, and she's back booking via ClassPass again.
+  c11: { kind: 'trial_offer', offerName: '🆕 CLASS PASS CLIENT OFFER - 1 MONTH UNLIMITED PASS', startDate: daysAgo(40), endDate: daysAgo(9), classesUsed: 0, classesIncluded: 999 },
+};
+
+// Last-30-day attendance count per client — the "are they coming a lot?" signal.
+const ATTENDANCE_LAST_30_DAYS: Record<string, number> = {
+  c1: 2,
+  c2: 4,
+  c3: 3,
+  c4: 1,
+  c5: 8,
+  c6: 0,
+  c7: 1,
+  c8: 5,
+  c9: 6,
+  c10: 6,
+  c11: 7, // frequent, but still no membership — the case worth flagging
 };
 
 const CLASS_SESSIONS: MtClassSession[] = [
@@ -73,6 +91,7 @@ const ROSTERS: Record<string, MtRosterEntry[]> = {
     { classSessionId: 'cls2', clientId: 'c7', attended: true, bookingSource: 'direct' },
     { classSessionId: 'cls2', clientId: 'c8', attended: true, bookingSource: 'direct' },
     { classSessionId: 'cls2', clientId: 'c9', attended: true, bookingSource: 'direct' },
+    { classSessionId: 'cls2', clientId: 'c11', attended: true, bookingSource: 'classpass' },
   ],
 };
 
@@ -98,6 +117,9 @@ export function createMockMarianaTekClient(): MarianaTekClient {
       const status = MEMBERSHIP_STATUS[clientId];
       if (!status) throw new Error(`mock membership status not found: ${clientId}`);
       return status;
+    },
+    async getRecentAttendanceCount(clientId) {
+      return ATTENDANCE_LAST_30_DAYS[clientId] ?? 0;
     },
   };
 }
