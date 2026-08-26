@@ -124,6 +124,19 @@ This is manual/assisted for now (I read Lucas's decisions and record them) —
 automating the recap-reply -> outcome pipeline is a later step, but the data
 model is already there.
 
+## Operating protocol
+
+- **No em-dashes ("—") in any client-facing text or email, ever** (Lucas,
+  2026-08-26). Applies to `message` and `followUp.message` content only —
+  internal recap formatting (section separators, labels) is exempt.
+- **Validation window: 2026-08-26 through 2026-08-28.** Every run's report
+  to Lucas includes three things: (1) what's being proposed to send today,
+  (2) what follow-ups are queued/being handled, (3) what's been learned so
+  far (stats, patterns, anything that changed). Nothing sends without his
+  explicit approval during this window. After 2026-08-28, if validated,
+  Claude can send autonomously without per-batch approval — but keeps
+  logging and reporting the same way.
+
 ## Sales processing (confirmed 2026-08-26: manual, permanently)
 
 Mariana Tek has no purchase-creation API (confirmed by their support team) —
