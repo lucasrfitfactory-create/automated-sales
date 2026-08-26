@@ -24,15 +24,24 @@ that specific message through HighLevel.
   to iterate against safe seeded data instead.
 - **Rules playbook** (`src/rules/playbook.ts`): the 3 confirmed paths ($39
   1-week trial, $99 1-month trial/Comeback/ClassPass-purchase, ClassPass
-  guest booking) are real, with a 3-touch conversion-oriented cadence
-  (welcome -> mid-trial pricing nudge -> final push) plus a 4th
-  expired-trial-no-conversion touch confirmed 2026-08-26. Only
-  'Group Fitness' classroom classes are in scope (PSC/Refined Reformer
-  excluded). Class-pack-low, genuine lapsed-real-membership win-back, and
-  generic-walk-in rules are still **placeholder** — haven't been reviewed
-  against the real playbook. Open question from the first real run: how
-  stale can a lapsed membership be before it's not worth a win-back (saw
-  one 19-21 months lapsed).
+  guest booking) are real. Cadence rebuilt 2026-08-26 as **text-first**:
+  every sales touch is a short single-product text, with an automatic
+  email follow-up if there's no reply within `followUp.afterDays` (2 days
+  default, 1 day for urgent "trial ends in ≤2/3 days" touches) — see
+  "Learning loop" below for how the follow-up actually gets sent. Copy
+  rules, confirmed the hard way after two rounds of real feedback: exactly
+  one product per message (no "or", not even framed as a choice), always
+  ends on a direct close ("Want me to set that up for you?"), never a
+  savings claim unless the math actually holds. A live Class Pack Sale
+  (20 classes/$349, ends Aug 31) is pushed as that one product to
+  ClassPass-related and expiring-pack segments while active — see
+  `pricing.ts`'s `isClassPackSaleActive()`, which turns it off on its own
+  after the deadline. Only 'Group Fitness' classroom classes are in scope
+  (PSC/Refined Reformer excluded). Class-pack-low (non-sale baseline),
+  genuine lapsed-real-membership win-back, and generic-walk-in rules are
+  still **placeholder** — haven't been reviewed against the real playbook.
+  Open question from the first real run: how stale can a lapsed membership
+  be before it's not worth a win-back (saw one 19-21 months lapsed).
 - **Pricing** (`src/rules/pricing.ts`): confirmed with Lucas 2026-08-25 —
   Weekly Unlimited is $49/wk (12mo), $59/wk (6mo), $69/wk (3mo). "Comeback
   Offer" naming confirmed against a real membership_instance ("🎯 COMEBACK
@@ -124,15 +133,24 @@ automation into that same admin domain is blocked at the platform level for
 this session regardless of which account is used. Between those two facts,
 Claude will never be the one directly processing a sale in Mariana Tek.
 
-What Claude does instead: `npm run check-replies` pulls every touch that's
-actually been sent (`status: 'sent'`) and surfaces any client reply since,
-via HighLevel's conversation history. It deliberately does NOT try to
-auto-classify a reply as a "yes" — freeform text is too varied to trust a
-keyword match with something this consequential. Instead, when this is run,
-Claude reads the replies and flags anything that looks like agreement as
-**IMPORTANT** when reporting back, so Lucas knows exactly which sales to go
-process manually. Not scheduled/continuous yet — run on demand until a
-periodic check is wired up.
+What Claude does instead: `npm run check-replies` reviews every touch
+that's actually been sent (`status: 'sent'`) two ways every time it's run
+(per Lucas 2026-08-26 — this is a standing part of "the job", not just an
+on-demand reply check):
+
+1. **New replies**, via HighLevel's conversation history. Deliberately does
+   NOT try to auto-classify a reply as "yes" — freeform text is too varied
+   to trust a keyword match with something this consequential. Claude reads
+   them and flags anything that looks like agreement as **IMPORTANT** when
+   reporting back, so Lucas knows exactly which sales to go process
+   manually.
+2. **Due follow-ups** — a text got no reply and `followUp.afterDays` has
+   passed. Queues the email follow-up as a new `'proposed'` touch, same
+   approval flow as anything from `npm run assess`. Verified idempotent —
+   never queued twice for the same original touch.
+
+Not scheduled/continuous yet — run on demand until a periodic check is
+wired up.
 
 ## Next steps
 
