@@ -1,4 +1,4 @@
-import { CLASSPASS_ONE_MONTH_PRICE, formatClassPackTeaser, formatWeeklyUnlimitedPricing } from './pricing.js';
+import { formatWeeklyUnlimitedPricing, CLASSPASS_ONE_MONTH_PRICE } from './pricing.js';
 import type { ProposedAction, Rule } from './types.js';
 
 // ============================================================================
@@ -12,8 +12,7 @@ import type { ProposedAction, Rule } from './types.js';
 //      treatment, different entry point)
 //   3. ClassPass guest booking               -> convert to Weekly Unlimited membership,
 //      ("Guest of ClassPass", no direct         with the $99 ClassPass 1-month-unlimited
-//      Fit Factory purchase on file)            pass as an easier ask, and class packages
-//                                                as a fallback if they don't want a membership
+//      Fit Factory purchase on file)            pass as an easier ask
 //
 // STILL PLACEHOLDER / not yet confirmed by Lucas: class-pack-running-low,
 // genuine lapsed-real-membership win-back (as opposed to the now-confirmed
@@ -44,6 +43,24 @@ import type { ProposedAction, Rule } from './types.js';
 // the actual pricing pitch (more room, feels less naggy); text is reserved
 // for the light-touch welcome. This is a first cut, not yet outcome-tuned —
 // see README's "Learning loop" section for how we adjust it from here.
+//
+// COPY RULES — confirmed with Lucas 2026-08-26 after reviewing a real batch
+// of drafts, apply to every message below:
+//   1. ONE product per message. A second option may be mentioned only as a
+//      direct either/or ("membership, or the $99 pass if you'd rather ease
+//      in — whichever makes sense") — never a 3-item menu. More options
+//      reads as "figure it out yourself," which converts worse than a
+//      single clear ask.
+//   2. Always end on a direct, concrete close ("Want me to set that up for
+//      you?") — never a soft "happy to help whenever, no rush." The goal is
+//      the client thinking "sure, let's do it," not "I'll think about it."
+//   3. Never state a savings/cost comparison unless the math actually holds
+//      at that attendance level. Caught a real bug from this: at 3
+//      classes/month, Weekly Unlimited's cheapest tier ($49/wk ≈ $212/mo)
+//      works out to ~$70/class — nowhere near cheaper than ClassPass. A
+//      convenience/simplicity framing is used instead below; a savings
+//      claim would need real per-visit ClassPass/drop-in pricing to back it
+//      up, which isn't confirmed.
 // ============================================================================
 
 const WEEKLY_UNLIMITED_PRICING = formatWeeklyUnlimitedPricing();
@@ -60,7 +77,7 @@ function isComeback(offerName: string): boolean {
   return /comeback/i.test(offerName);
 }
 
-const FREQUENT_THRESHOLD = 3; // classes in the last 30 days — "coming a lot" per Lucas, 2026-08-26
+const FREQUENT_THRESHOLD = 3; // classes in the last 30 days — "coming a lot" per Lucas, 2026-08-26. Drives a direct membership pitch, NOT a savings claim (see COPY RULES above).
 
 export const PLAYBOOK: Rule[] = [
   // Path 0: ClassPass rebooker — bought a Fit Factory trial before, it
@@ -82,8 +99,8 @@ export const PLAYBOOK: Rule[] = [
       channel: 'email',
       headline: 'ClassPass rebooker post-trial — pitch membership directly',
       message: frequent
-        ? `Hey ${ctx.client.firstName} — noticed you're back to booking through ClassPass after your trial wrapped up, and you're in here a lot (${ctx.attendanceLast30Days}x this month!). Since you're clearly loving it, want to just get you on a membership? It'd probably work out cheaper than ClassPass per-visit too — Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING}, happy to set it up whenever.`
-        : `Hey ${ctx.client.firstName} — noticed you're back to booking through ClassPass after your trial wrapped up. Whenever you're ready to make Fit Factory a regular thing, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) is worth a look — want me to walk you through it?`,
+        ? `Hey ${ctx.client.firstName} — noticed you're back to booking through ClassPass after your trial wrapped up, and you're in here a lot (${ctx.attendanceLast30Days}x this month!). Since you're clearly loving it, let's just get you on a membership — Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING}. Want me to set that up for you?`
+        : `Hey ${ctx.client.firstName} — noticed you're back to booking through ClassPass after your trial wrapped up. Whenever you're ready to make Fit Factory a regular thing, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) is the way to go. Want me to set that up for you?`,
       cooldownDays: 14,
     };
     return action;
@@ -105,7 +122,7 @@ export const PLAYBOOK: Rule[] = [
         segmentLabel: `${ctx.status.offerName} — expired ${-daysLeft}d ago, no conversion`,
         channel: 'email',
         headline: 'Trial expired without converting — win-back',
-        message: `Hey ${ctx.client.firstName} — noticed your one-week trial wrapped up a little while ago and we haven't seen you set up on a membership yet. Still want to keep training with us? Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment — happy to help whenever works, no rush.`,
+        message: `Hey ${ctx.client.firstName} — noticed your one-week trial wrapped up a little while ago and we haven't seen you set up on a membership yet. Still want to keep training with us? Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment. Want me to set that up for you?`,
         cooldownDays: 14,
       };
       return action;
@@ -116,7 +133,7 @@ export const PLAYBOOK: Rule[] = [
         segmentLabel: `${ctx.status.offerName} — ${daysLeft}d left`,
         channel: 'email',
         headline: 'Final push to convert before $39 trial ends',
-        message: `Hey ${ctx.client.firstName} — your week of unlimited classes wraps up soon! Loved having you in. Want to keep it going on a Weekly Unlimited membership? We've got ${WEEKLY_UNLIMITED_PRICING} depending on commitment length — happy to set you up with whichever fits best, today if you want to lock in your spot.`,
+        message: `Hey ${ctx.client.firstName} — your week of unlimited classes wraps up soon! Loved having you in. Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment length — want me to set that up for you today so you don't lose momentum?`,
         cooldownDays: 3,
       };
       return action;
@@ -137,7 +154,7 @@ export const PLAYBOOK: Rule[] = [
       segmentLabel: `${ctx.status.offerName} — mid-trial`,
       channel: 'email',
       headline: 'Mid-trial nudge — put membership pricing in front of them early',
-      message: `Hey ${ctx.client.firstName} — hope you're loving the classes so far! A few of our regulars started exactly where you are. If you want to keep this going after your trial week, Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment — happy to answer any questions before your trial wraps up.`,
+      message: `Hey ${ctx.client.firstName} — hope you're loving the classes so far! If you want to keep this going after your trial week, Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment. Want me to set that up for you?`,
       cooldownDays: 4,
     };
     return action;
@@ -159,7 +176,7 @@ export const PLAYBOOK: Rule[] = [
         segmentLabel: `${ctx.status.offerName} — expired ${-daysLeft}d ago, no conversion`,
         channel: 'email',
         headline: 'Trial expired without converting — win-back',
-        message: `Hey ${ctx.client.firstName} — ${comeback ? "so glad you were back in class for a bit! " : ''}noticed your month of unlimited classes wrapped up a little while ago and we haven't seen you set up on a membership yet. Still want to keep it going? Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment — happy to help whenever works, no rush.`,
+        message: `Hey ${ctx.client.firstName} — ${comeback ? "so glad you were back in class for a bit! " : ''}noticed your month of unlimited classes wrapped up a little while ago and we haven't seen you set up on a membership yet. Still want to keep it going? Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment. Want me to set that up for you?`,
         cooldownDays: 14,
       };
       return action;
@@ -170,7 +187,7 @@ export const PLAYBOOK: Rule[] = [
         segmentLabel: `${ctx.status.offerName} — ${daysLeft}d left`,
         channel: 'email',
         headline: 'Final push to convert before 1-month unlimited trial ends',
-        message: `Hey ${ctx.client.firstName} — ${comeback ? "so glad you've been back in class! " : ''}your month of unlimited classes wraps up soon. Want to lock in a Weekly Unlimited membership so you keep the momentum? We've got ${WEEKLY_UNLIMITED_PRICING} depending on commitment length — happy to set you up today.`,
+        message: `Hey ${ctx.client.firstName} — ${comeback ? "so glad you've been back in class! " : ''}your month of unlimited classes wraps up soon. Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment length — want me to set that up for you today so you keep the momentum?`,
         cooldownDays: 3,
       };
       return action;
@@ -193,7 +210,7 @@ export const PLAYBOOK: Rule[] = [
       segmentLabel: `${ctx.status.offerName} — mid-trial`,
       channel: 'email',
       headline: 'Mid-trial nudge — put membership pricing in front of them early',
-      message: `Hey ${ctx.client.firstName} — hope the month's been going well! If you want to keep the momentum going past your trial, Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment — happy to walk you through it whenever's convenient, no rush.`,
+      message: `Hey ${ctx.client.firstName} — hope the month's been going well! If you want to keep the momentum going past your trial, Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment. Want me to set that up for you?`,
       cooldownDays: 10,
     };
     return action;
@@ -208,10 +225,10 @@ export const PLAYBOOK: Rule[] = [
       segmentKey: 'classpass_guest_pitch',
       segmentLabel: `ClassPass guest — no direct Fit Factory purchase${frequent ? ` (${ctx.attendanceLast30Days}x last 30d)` : ''}`,
       channel: 'email',
-      headline: 'ClassPass guest — pitch membership, fallback to $99 pass or packages',
+      headline: 'ClassPass guest — pitch membership, $99 pass as the one alternative',
       message: frequent
-        ? `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass — you've been in ${ctx.attendanceLast30Days} times over the last month! At that rate, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) would likely save you money versus paying per class through ClassPass. Want me to set you up? If you'd rather ease in, we've also got a $${CLASSPASS_ONE_MONTH_PRICE} one-month unlimited pass, or ${formatClassPackTeaser()}.`
-        : `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass! If you want to make Fit Factory a regular thing, a Weekly Unlimited membership is the best value (${WEEKLY_UNLIMITED_PRICING}). If you'd rather ease in, we've also got a $${CLASSPASS_ONE_MONTH_PRICE} one-month unlimited pass, or ${formatClassPackTeaser()} if a membership isn't the right fit yet. Happy to walk you through options.`,
+        ? `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass — you've been in ${ctx.attendanceLast30Days} times over the last month! Since you're clearly coming in regularly, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) would make it a lot simpler than booking one-off each time. Want me to set that up for you?`
+        : `Hey ${ctx.client.firstName}, thanks for coming in through ClassPass! If you want to make Fit Factory a regular thing, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) is the way to go — or if you'd rather ease in first, we've got a $${CLASSPASS_ONE_MONTH_PRICE} one-month unlimited pass. Whichever makes more sense for you, want me to set it up?`,
       cooldownDays: 7,
     };
     return action;
@@ -230,8 +247,8 @@ export const PLAYBOOK: Rule[] = [
       channel: 'email',
       headline: expired ? 'Class pack used up — re-engage' : 'Class pack almost out — upsell',
       message: expired
-        ? `Hey ${ctx.client.firstName} — looks like your ${ctx.status.packName} is all used up! Want to grab another one (${formatClassPackTeaser()}), or is it time to talk about a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) so you're not thinking about it each time?`
-        : `Hey ${ctx.client.firstName} — you're down to your last class on your ${ctx.status.packName}. Want me to set you up with another one (${formatClassPackTeaser()}), or would a Weekly Unlimited membership make more sense at this point?`,
+        ? `Hey ${ctx.client.firstName} — looks like your ${ctx.status.packName} is all used up! Want another pack, or would a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) make more sense so you're not thinking about it each time? Either way, want me to set that up for you?`
+        : `Hey ${ctx.client.firstName} — you're down to your last class on your ${ctx.status.packName}. Want another pack, or would a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) make more sense at this point? Want me to set that up for you?`,
       cooldownDays: 5,
     };
     return action;
@@ -245,7 +262,7 @@ export const PLAYBOOK: Rule[] = [
       segmentLabel: `Lapsed member (${ctx.status.planName}, ended ${ctx.status.endedAt.slice(0, 10)})`,
       channel: 'text',
       headline: 'Lapsed member showed up — win-back',
-      message: `Hey ${ctx.client.firstName}, so good to see you back in class! Want to talk about getting your membership going again? We can make it easy.`,
+      message: `Hey ${ctx.client.firstName}, so good to see you back in class! Want me to get your membership set back up?`,
       cooldownDays: 14,
     };
     return action;
@@ -267,8 +284,8 @@ export const PLAYBOOK: Rule[] = [
       channel: 'email',
       headline: frequent ? 'Frequent drop-in, no membership — pitch membership directly' : 'Drop-in with nothing on file — pitch trial offer',
       message: frequent
-        ? `Hey ${ctx.client.firstName} — noticed you've been in ${ctx.attendanceLast30Days} times over the last month without a membership or pack. At that pace, a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) would likely work out cheaper for you. Want me to set you up?`
-        : `Hey ${ctx.client.firstName}, thanks for dropping into class! If you want to try a few more, we've got a $39 one-week unlimited trial that's a great way to explore the studio. Want the details?`,
+        ? `Hey ${ctx.client.firstName} — noticed you've been in ${ctx.attendanceLast30Days} times over the last month without a membership or pack. Since you're clearly coming in regularly, let's simplify it with a Weekly Unlimited membership (${WEEKLY_UNLIMITED_PRICING}) instead of thinking about it each time. Want me to set that up for you?`
+        : `Hey ${ctx.client.firstName}, thanks for dropping into class! If you want to try a few more, we've got a $39 one-week unlimited trial that's a great way to explore the studio. Want me to send you the link to get started?`,
       cooldownDays: frequent ? 7 : 10,
     };
     return action;
