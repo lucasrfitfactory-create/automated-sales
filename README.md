@@ -8,21 +8,30 @@ that specific message through HighLevel.
 
 ## Status
 
-- **Mariana Tek**: **live** — API access came through 2026-08-26.
-  `src/marianaTek/realClient.ts` is verified end-to-end against real data
-  (see its top comment for exactly what was confirmed empirically, since
-  their docs site stays gated even with the key). Two known gaps: class
-  packs aren't detected yet (no pack/credit resource found so far — those
-  clients currently read as `no_active_status`), and `membership_paused`'s
-  shape is assumed, never observed on a real frozen membership.
-  `MARIANA_TEK_MODE=real` is set in `.env`; flip back to `mock` to iterate
-  against safe seeded data instead.
+- **Mariana Tek**: **live** — API access came through 2026-08-26, and the
+  real client has now been validated against three full real "yesterday"
+  recap runs (214→158→157 real attendees), each surfacing and fixing a real
+  bug: wrong-business pitches (Refined Reformer/PSC products bleeding into
+  the Fit Factory playbook — fixed two ways, see `realClient.ts`), and
+  expired trials being misread as generic lapsed-membership win-backs
+  instead of their own segment. See its top comment for everything
+  confirmed empirically (their docs site stays gated even with the key).
+  Two known gaps remain: class packs aren't detected yet (no pack/credit
+  resource found — those clients read as `no_active_status`, likely
+  inflating that bucket), and `membership_paused` is unverified (never
+  observed a real frozen membership). `MARIANA_TEK_MODE=real` is set in
+  `.env`; flip back to `mock` to iterate against safe seeded data instead.
 - **Rules playbook** (`src/rules/playbook.ts`): the 3 confirmed paths ($39
   1-week trial, $99 1-month trial/Comeback/ClassPass-purchase, ClassPass
   guest booking) are real, with a 3-touch conversion-oriented cadence
-  (welcome -> mid-trial pricing nudge -> final push). Class-pack-low,
-  lapsed-member, and generic-walk-in rules are still **placeholder** —
-  haven't been reviewed against the real playbook.
+  (welcome -> mid-trial pricing nudge -> final push) plus a 4th
+  expired-trial-no-conversion touch confirmed 2026-08-26. Only
+  'Group Fitness' classroom classes are in scope (PSC/Refined Reformer
+  excluded). Class-pack-low, genuine lapsed-real-membership win-back, and
+  generic-walk-in rules are still **placeholder** — haven't been reviewed
+  against the real playbook. Open question from the first real run: how
+  stale can a lapsed membership be before it's not worth a win-back (saw
+  one 19-21 months lapsed).
 - **Pricing** (`src/rules/pricing.ts`): confirmed with Lucas 2026-08-25 —
   Weekly Unlimited is $49/wk (12mo), $59/wk (6mo), $69/wk (3mo). "Comeback
   Offer" naming confirmed against a real membership_instance ("🎯 COMEBACK
@@ -40,14 +49,16 @@ that specific message through HighLevel.
 
 ## How it works
 
-1. `npm run assess` pulls class sessions from Mariana Tek for the last
-   `ASSESS_LOOKBACK_DAYS` (default 14) that haven't been processed yet
-   (tracked in `data/store.json`). In real mode, Mariana Tek's date filters
-   don't work (see `realClient.ts`), so this walks pages of class sessions
-   plus one roster/client/membership lookup per attendee — cheap for a
-   short window, but a 14-day first run against a real location could be a
-   few hundred requests. Start with a short `ASSESS_LOOKBACK_DAYS` (e.g. 1)
-   for a first real run.
+1. `npm run assess` pulls class sessions from Mariana Tek for the configured
+   window — either `ASSESS_LOOKBACK_DAYS` (default 14, rolling window ending
+   now) or an explicit `ASSESS_SINCE`/`ASSESS_BEFORE` ISO range (for
+   targeting a specific calendar day, e.g. "yesterday") — filtered to
+   'Group Fitness' classroom only, that haven't been processed yet (tracked
+   in `data/store.json`). In real mode, Mariana Tek's date filters don't
+   work (see `realClient.ts`), so this walks pages of class sessions plus
+   one roster/client/membership lookup per attendee — cheap for a short
+   window, but a 14-day first run against a real location could be a few
+   hundred requests. Start with a short window for a first real run.
 2. For each attendee, fetches their membership status and runs it through
    `PLAYBOOK` (`src/rules/playbook.ts`) — first matching rule wins.
 3. Checks `data/store.json`'s touch log so the same client isn't re-proposed
@@ -105,15 +116,13 @@ model is already there.
 
 ## Next steps
 
-- Get real trigger/copy details for class-pack-low, lapsed-member, and
+- Get real trigger/copy details for class-pack-low, genuine
+  lapsed-real-membership win-back (including a staleness cutoff), and
   generic-walk-in segments to replace their placeholders in
   `src/rules/playbook.ts`.
 - Find the real class-pack/credit resource in Mariana Tek's API (not yet
   located — `getMembershipStatus` never returns `class_pack` against real
   data today) and confirm `membership_paused`'s real shape.
-- Run a real `npm run assess` with a short lookback window as the first
-  live end-to-end test — not done yet, since it surfaces real client PII
-  into the recap.
 - Phase 2: Mariana Tek write access to process approved membership sales
   directly (currently out of scope — sales still need to be entered in
   Mariana Tek manually even after a client agrees).
