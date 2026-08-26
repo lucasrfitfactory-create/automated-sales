@@ -1,11 +1,30 @@
-import type { MtClassSession, MtClient } from '../marianaTek/types.js';
+import type { MtClassSession, MtClient, MtMembershipStatus } from '../marianaTek/types.js';
 import type { ProposedAction } from '../rules/types.js';
 
 export interface RecapItem {
   client: MtClient;
   classSession: MtClassSession;
+  status: MtMembershipStatus;
   action: ProposedAction | null;
   skippedReason?: string; // set when a rule matched but we're not re-proposing (cooldown)
+}
+
+/** Human-readable status for the "no action needed" rows — without this every no-action row looked identical, hiding whether detection actually worked. */
+function describeStatus(status: MtMembershipStatus): string {
+  switch (status.kind) {
+    case 'trial_offer':
+      return `${status.offerName} (no rule matched)`;
+    case 'class_pack':
+      return `${status.packName} — ${status.classesRemaining}/${status.classesTotal} left${status.expiresAt ? `, exp ${status.expiresAt.slice(0, 10)}` : ''}`;
+    case 'membership_active':
+      return `active member (${status.planName})`;
+    case 'membership_paused':
+      return `paused member (${status.planName}${status.resumesAt ? `, resumes ${status.resumesAt.slice(0, 10)}` : ''})`;
+    case 'membership_lapsed':
+      return `${status.planName} (no rule matched)`;
+    case 'no_active_status':
+      return 'no active offer/membership/pack on file';
+  }
 }
 
 export function buildRecapText(items: RecapItem[]): string {
@@ -33,7 +52,7 @@ export function buildRecapText(items: RecapItem[]): string {
       } else if (item.skippedReason) {
         lines.push(`  • ${name} — ${item.skippedReason}`);
       } else {
-        lines.push(`  • ${name} — no action needed`);
+        lines.push(`  • ${name} — no action needed (${describeStatus(item.status)})`);
       }
     }
     lines.push('');
@@ -59,7 +78,7 @@ export function buildRecapTable(items: RecapItem[]): string {
     if (item.skippedReason) {
       return `| ${cls} | ${name} | ${escapeCell(item.skippedReason)} | _skipped (cooldown)_ | — |`;
     }
-    return `| ${cls} | ${name} | no active offer/pack | _no action needed_ | — |`;
+    return `| ${cls} | ${name} | ${escapeCell(describeStatus(item.status))} | _no action needed_ | — |`;
   });
   return [header, ...rows].join('\n');
 }

@@ -60,7 +60,7 @@ async function main() {
       const action = evaluate({ client, status, classSession: session, rosterEntry: entry, now }, PLAYBOOK);
 
       if (!action) {
-        items.push({ client, classSession: session, action: null });
+        items.push({ client, classSession: session, status, action: null });
         continue;
       }
 
@@ -71,6 +71,7 @@ async function main() {
           items.push({
             client,
             classSession: session,
+            status,
             action: null,
             skippedReason: `${action.segmentLabel} — already contacted ${daysSince}d ago (cooldown ${action.cooldownDays}d), skipping`,
           });
@@ -78,7 +79,7 @@ async function main() {
         }
       }
 
-      items.push({ client, classSession: session, action });
+      items.push({ client, classSession: session, status, action });
       repo.recordTouch({
         id: `${session.id}:${client.id}:${action.segmentKey}:${now.toISOString()}`,
         contactId: client.id,
