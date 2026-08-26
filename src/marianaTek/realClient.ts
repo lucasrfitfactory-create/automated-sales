@@ -233,6 +233,18 @@ export function createRealMarianaTekClient(opts: { apiUrl: string; apiKey: strin
       const endedAtOf = (a: any): string =>
         a.cancellation_datetime ?? a.scheduled_end_datetime ?? a.end_date ?? a.calculated_start_datetime ?? a.purchase_date ?? a.start_date ?? 'unknown';
 
+      // Real trial end date. Confirmed 2026-08-26 against a real example
+      // (Sameer Saini, a currently-active trial ending 2026-09-07): both
+      // scheduled_end_datetime and next_charge_date were null even though
+      // the trial is genuinely still running — end_date (or
+      // calculated_end_datetime/payment_interval_end_date as further
+      // fallbacks) had the real date. The earlier version of this fallback
+      // chain didn't include end_date at all and silently landed on
+      // start_date, making an active trial with 12 days left read as
+      // expired 19 days ago — caught before any message went out.
+      const trialEndDateOf = (a: any): string =>
+        a.end_date ?? a.scheduled_end_datetime ?? a.calculated_end_datetime ?? a.payment_interval_end_date ?? a.next_charge_date ?? a.start_date;
+
       // Priority 1: a real (non-intro) active membership means they've
       // converted — "we're good" (per Lucas 2026-08-26), regardless of any
       // trial or past-lapsed instance also on file.
@@ -264,7 +276,7 @@ export function createRealMarianaTekClient(opts: { apiUrl: string; apiKey: strin
           kind: 'trial_offer',
           offerName: a.membership_name,
           startDate: a.start_date,
-          endDate: a.scheduled_end_datetime ?? a.next_charge_date ?? a.start_date,
+          endDate: trialEndDateOf(a),
           // Not derivable from membership_instances — unused by the current
           // playbook rules (they key off dates, not class counts), so this
           // is a harmless placeholder rather than a real figure.
@@ -311,7 +323,7 @@ export function createRealMarianaTekClient(opts: { apiUrl: string; apiKey: strin
             kind: 'trial_offer',
             offerName: a.membership_name,
             startDate: a.start_date,
-            endDate: a.scheduled_end_datetime ?? a.next_charge_date ?? endedAtOf(a),
+            endDate: trialEndDateOf(a),
             classesUsed: 0,
             classesIncluded: 999,
           };
