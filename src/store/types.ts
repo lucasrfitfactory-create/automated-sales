@@ -30,9 +30,12 @@ export interface TouchLogEntry {
 export interface Store {
   processedClassSessions: Record<string, { processedAt: string }>;
   touchLog: TouchLogEntry[];
+  /** "Where the pipeline left off" per cursor key — drives `npm run gather`'s catch-up window. */
+  cursors: Record<string, string>;
 }
 
 export const EMPTY_STORE: Store = {
   processedClassSessions: {},
   touchLog: [],
+  cursors: {},
 };

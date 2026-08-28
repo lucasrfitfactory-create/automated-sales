@@ -21,12 +21,10 @@ import { Repository } from '../store/repository.js';
 // check is wired up. This is "the job" reviewing what it already sent, per
 // Lucas 2026-08-26: run it every time, not just when checking for replies.
 
-const STORE_PATH = process.env.STORE_PATH ?? 'data/store.json';
-
-const repo = new Repository(STORE_PATH);
+const repo = new Repository();
 const highlevel = createHighLevelClient(process.env);
 
-const sentTouches = repo.allTouches().filter((t) => t.status === 'sent' && t.outcomeAt);
+const sentTouches = (await repo.allTouches()).filter((t) => t.status === 'sent' && t.outcomeAt);
 
 if (sentTouches.length === 0) {
   console.log('No sent touches yet — nothing to review.');
@@ -47,26 +45,43 @@ for (const touch of sentTouches) {
 
   if (newReplies.length > 0) {
     anythingFound = true;
-    console.log('--- NEW REPLY ---');
+    // A reply existing isn't the same as it still needing attention — check
+    // whether a later outbound (Lucas personally, or anyone) already
+    // answered the most recent inbound message before flagging this as
+    // pending. Confirmed 2026-08-27, Ramona Bissoon: her reply was reported
+    // as needing action when Lucas had already replied with full pricing
+    // hours earlier — this check is what that was missing.
+    const mostRecentReply = newReplies[0]; // history is most-recent-first
+    const laterOutbound = history.find(
+      (m) => m.direction === 'outbound' && (m.dateAdded ?? '') > (mostRecentReply?.dateAdded ?? ''),
+    );
+
+    console.log(laterOutbound ? '--- REPLY (already answered) ---' : '--- NEW REPLY (needs a look) ---');
     console.log(`Touch: ${touch.id}`);
     console.log(`Client: ${touch.recipient.firstName} ${touch.recipient.lastName}`);
     console.log(`Segment: ${touch.segmentKey}`);
     console.log(`Sent: ${touch.outcomeAt}`);
     console.log(`Original message: "${touch.message}"`);
-    console.log(`New reply/replies since sent:`);
-    for (const m of newReplies.reverse()) {
+    console.log(`Reply/replies since sent:`);
+    for (const m of newReplies.slice().reverse()) {
       console.log(`  [${m.dateAdded}] ${m.type}: ${m.body ?? '(no body)'}`);
+    }
+    if (laterOutbound) {
+      console.log(`Already handled: [${laterOutbound.dateAdded}] ${laterOutbound.body ?? '(no body)'}`);
     }
     continue; // they've engaged — a reply takes priority over an automated follow-up
   }
 
   if (!touch.followUp || touch.followUp.proposedTouchId) continue;
-  const daysSinceSent = Math.round((Date.now() - new Date(touch.outcomeAt!).getTime()) / (1000 * 60 * 60 * 24));
+  // floor, not round — per Lucas 2026-08-27, a follow-up must wait the FULL
+  // afterDays, not just "close enough" (rounding let a 16-hour gap read as
+  // "1 day" and fire a same-day follow-up).
+  const daysSinceSent = Math.floor((Date.now() - new Date(touch.outcomeAt!).getTime()) / (1000 * 60 * 60 * 24));
   if (daysSinceSent < touch.followUp.afterDays) continue;
 
   anythingFound = true;
   const followUpTouchId = `followup:${touch.id}`;
-  repo.recordTouch({
+  await repo.recordTouch({
     id: followUpTouchId,
     contactId: touch.contactId,
     segmentKey: `${touch.segmentKey}_followup`,
@@ -78,7 +93,7 @@ for (const touch of sentTouches) {
     headline: touch.followUp.headline,
     message: touch.followUp.message,
   });
-  repo.markFollowUpProposed(touch.id, followUpTouchId);
+  await repo.markFollowUpProposed(touch.id, followUpTouchId);
 
   console.log('--- FOLLOW-UP DUE (no reply after text) ---');
   console.log(`Original touch: ${touch.id} (sent ${daysSinceSent}d ago, no reply)`);
@@ -87,8 +102,6 @@ for (const touch of sentTouches) {
   console.log(`Channel: ${touch.followUp.channel.toUpperCase()}`);
   console.log(`Message: "${touch.followUp.message}"`);
 }
-
-repo.save();
 
 if (!anythingFound) {
   console.log('Nothing to report — no new replies, no follow-ups due yet.');

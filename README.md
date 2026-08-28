@@ -1,10 +1,13 @@
 # Fit Factory — Automated Sales Agent
 
 Reads class rosters from Mariana Tek, checks each attendee's membership/pack/
-intro-offer status, and proposes a follow-up action (email or text) based on
-a rules playbook. Nothing sends on its own — Lucas reviews the recap in chat
-and approves items one at a time; only then does `npm run send` dispatch
-that specific message through HighLevel.
+intro-offer status, and drafts a personalized follow-up (email or text).
+Deliberately **not** an unattended background job: Lucas launches it from a
+chat with Claude, Claude reads each attendee's real account/attendance data
+and writes their message itself (not a fixed template), then Lucas reviews
+and approves before anything sends through HighLevel. This is also how the
+learning loop stays real — Claude is the one reading replies and Lucas's own
+decisions each run, not a script pattern-matching keywords.
 
 ## Status
 
@@ -22,18 +25,24 @@ that specific message through HighLevel.
   everything confirmed empirically (their docs site stays gated even with
   the key). `MARIANA_TEK_MODE=real` is set in `.env`; flip back to `mock`
   to iterate against safe seeded data instead.
-- **Rules playbook** (`src/rules/playbook.ts`): the 3 confirmed paths ($39
-  1-week trial, $99 1-month trial/Comeback/ClassPass-purchase, ClassPass
-  guest booking) are real. Cadence rebuilt 2026-08-26 as **text-first**:
-  every sales touch is a short single-product text, with an automatic
-  email follow-up if there's no reply within `followUp.afterDays` (2 days
-  default, 1 day for urgent "trial ends in ≤2/3 days" touches) — see
-  "Learning loop" below for how the follow-up actually gets sent. Copy
-  rules, confirmed the hard way after two rounds of real feedback: exactly
-  one product per message (no "or", not even framed as a choice), always
-  ends on a direct close ("Want me to set that up for you?"), never a
-  savings claim unless the math actually holds. A live Class Pack Sale
-  (20 classes/$349, ends Aug 31) is pushed as that one product to
+- **Rules playbook** (`src/rules/playbook.ts`): still the source of truth
+  for *which* product applies to each segment, cooldowns, and pricing — the
+  3 confirmed paths ($39 1-week trial, $99 1-month trial/Comeback/
+  ClassPass-purchase, ClassPass guest booking) are real. What it returns is
+  now a **compliant reference draft**, not the final message — `npm run
+  gather` surfaces it as `referenceMessage`/`referenceHeadline`, and Claude
+  personalizes the actual wording per contact (real attendance pattern,
+  specific offer, tone) before it gets recorded, while keeping the
+  reference's hard constraints intact. Cadence stays **text-first**: every
+  sales touch is a short single-product text, with an email follow-up if
+  there's no reply within `followUp.afterDays` (2 days default, 1 day for
+  urgent "trial ends in ≤2/3 days" touches). Copy rules, confirmed the hard
+  way after two rounds of real feedback and enforced by `npm run propose`
+  where possible (see "How it works" below): exactly one product per
+  message (no "or", not even framed as a choice), always ends on a direct
+  close ("Want me to set that up for you?"), never a savings claim unless
+  the math actually holds, never an em-dash. A live Class Pack Sale (20
+  classes/$349, ends Aug 31) is pushed as that one product to
   ClassPass-related and expiring-pack segments while active — see
   `pricing.ts`'s `isClassPackSaleActive()`, which turns it off on its own
   after the deadline. Only 'Group Fitness' classroom classes are in scope
@@ -52,41 +61,65 @@ that specific message through HighLevel.
   schemas, not guesses. Runs in mock mode until Lucas generates a **Private
   Integration Token** (no external approval needed, unlike Mariana Tek —
   see Setup below) and sets `HIGHLEVEL_MODE=real`.
-- **Recap delivery**: printed as a markdown table in chat (and saved to
-  `data/recaps/`) for Lucas to review. Once he approves an item, `npm run
-  send -- <touchId>` dispatches that one message through HighLevel — never
-  automatic, always one explicit approval per send.
+- **Recap delivery**: printed as a markdown table in chat, live, as part of
+  Claude drafting and proposing each message — see "How it works" below.
+- **Store**: local JSON file (`data/store.json`, gitignored) — processed
+  classes, the full touch log, and the gather cursor. This runs as a chat
+  session on Lucas's own machine, not an ephemeral cloud runner, so a local
+  file surviving between sessions is all the durability this needs.
 
 ## How it works
 
-1. `npm run assess` pulls class sessions from Mariana Tek for the configured
-   window — either `ASSESS_LOOKBACK_DAYS` (default 14, rolling window ending
-   now) or an explicit `ASSESS_SINCE`/`ASSESS_BEFORE` ISO range (for
-   targeting a specific calendar day, e.g. "yesterday") — filtered to
-   'Group Fitness' classroom only, that haven't been processed yet (tracked
-   in `data/store.json`). In real mode, Mariana Tek's date filters don't
-   work (see `realClient.ts`), so this walks pages of class sessions plus
-   one roster/client/membership lookup per attendee — cheap for a short
-   window, but a 14-day first run against a real location could be a few
-   hundred requests. Start with a short window for a first real run.
-2. For each attendee, fetches their membership status and runs it through
-   `PLAYBOOK` (`src/rules/playbook.ts`) — first matching rule wins.
-3. Checks `data/store.json`'s touch log so the same client isn't re-proposed
-   the same segment within that rule's cooldown window.
-4. Prints/saves a recap listing every attendee, their status, and the
-   proposed action (or why none/nothing new was proposed).
-5. Marks the class as processed and logs any proposed touches (including
-   the drafted message and recipient contact info).
-6. Once Lucas approves an item, `npm run send -- <touchId>` upserts the
-   contact in HighLevel and sends that one email/text.
+This is a **two-step, chat-driven** pipeline — Lucas asks Claude to run it
+(in a Claude Code session, whenever he wants, not on an unattended
+schedule), and Claude does both steps in the same conversation:
+
+1. **`npm run gather`** — pulls every class session between wherever the
+   pipeline left off (the `gather_since` cursor in `data/store.json`) and right now, filtered
+   to 'Group Fitness' classroom only, that haven't been processed yet. No
+   fixed lookback window: this is what makes "catch up since I last ran it"
+   work regardless of the gap. (First-ever run, with no cursor yet, falls
+   back to `GATHER_INITIAL_LOOKBACK_HOURS`, default 24h; `ASSESS_SINCE`/
+   `ASSESS_BEFORE` still override both for an explicit calendar-day range.)
+   For each attendee, fetches their real membership/pack/trial status and
+   30-day attendance count, and matches it against `PLAYBOOK`
+   (`src/rules/playbook.ts`) to find which segment/product/cooldown
+   applies — first matching rule wins, same as before. Writes everything to
+   `data/gather/<timestamp>.json` as a candidate manifest and marks those
+   classes processed. Does **not** touch the touch log yet.
+2. **Claude reads that manifest** and, for each real candidate, writes the
+   actual message — referencing their specific attendance/account details
+   (e.g. "I see you trained 3 times last week"), not the generic
+   `referenceMessage` the playbook produced, while keeping its hard
+   constraints (single product, correct price, direct close, no em-dash).
+   Anyone flagged with `priorRejections` (a past touch Lucas rejected with a
+   note) gets called out to Lucas instead of silently re-proposed.
+3. Claude presents the drafted recap in chat. Lucas approves, edits, or
+   rejects each item.
+4. **`npm run propose -- <file>`** — Claude writes the approved/edited
+   drafts to a JSON file and runs this to record them in the touch log as
+   `status: 'proposed'`. Rejects (doesn't record) anything with an empty
+   message or an em-dash, as a hard backstop on top of Claude's own care.
+5. **`npm run send -- <touchId> [touchId ...] | all`** — dispatches exactly
+   the touches Lucas approved through HighLevel. Never automatic.
+6. **`npm run check-replies`** — Claude reads new replies (raw, no
+   keyword-classification) and flags anything that looks like a yes as
+   **IMPORTANT** for Lucas to go process manually (see "Sales processing"
+   below), and queues due email follow-ups.
+7. **`npm run stats`** — segment-level approval/rejection/conversion rates,
+   the quantitative half of the learning loop (see "Learning loop" below).
 
 ## Setup
 
 ```bash
 npm install
 cp .env.example .env   # fill in as integrations go live; mock mode needs no changes
-npm run assess
+npm run gather
 ```
+
+Code is hosted on GitHub (`lucasrfitfactory-create/automated-sales`) for
+version control and backup, but nothing runs there — every run happens in a
+chat session on Lucas's own machine, launched on demand.
 
 ### Getting a HighLevel Private Integration Token
 
@@ -106,23 +139,31 @@ directly, in a couple minutes:
 
 ## Learning loop
 
-The touch log (`data/store.json`) is more than a dedup/cooldown mechanism —
-it's the record the "keep what works, adapt what doesn't" loop runs on:
+The touch log (`data/store.json`) is more than a
+dedup/cooldown mechanism — it's the record the "keep what works, adapt what
+doesn't" loop runs on, and it has two halves:
 
-1. Every proposed action from `npm run assess` is logged with `status:
+**Quantitative** (automatic, works without Claude in the loop):
+1. Every proposed action from `npm run propose` is logged with `status:
    'proposed'`.
-2. As Lucas approves/edits/rejects items from a recap (in chat, for now),
-   run `npm run outcome -- <touchId> <approved|edited|rejected|sent>` to
-   record it. Once messages are actually sent and we can tell if someone
-   converted, `converted` closes the loop.
-3. `npm run stats` reports approval rate per segment (`trial_1week_convert`,
-   `classpass_guest_pitch`, etc.) — a segment that's consistently rejected or
-   edited the same way is a signal to rewrite it in `src/rules/playbook.ts`;
-   one that converts well is a pattern to reuse elsewhere.
+2. As Lucas approves/edits/rejects items from a recap, `npm run outcome --
+   <touchId> <approved|edited|rejected|sent>` records it. Once messages are
+   actually sent and we can tell if someone converted, `converted` closes
+   the loop.
+3. `npm run stats` reports approval/rejection/conversion rates per segment
+   (`trial_1week_convert`, `classpass_guest_pitch`, etc.).
 
-This is manual/assisted for now (I read Lucas's decisions and record them) —
-automating the recap-reply -> outcome pipeline is a later step, but the data
-model is already there.
+**Qualitative** (needs judgment — this is why the pipeline is chat-driven,
+not an unattended job): stats alone don't say *why* a segment keeps getting
+rejected, or whether one rejection is a real pattern versus a one-off
+exception. That reading is done by Claude, live, drawing on what actually
+happened this run — replies from clients (via `npm run check-replies`),
+Lucas's own edits/rejections in chat, and the stats above — before deciding
+a segment's copy or trigger in `src/rules/playbook.ts` is actually worth
+rewriting. The rule of thumb: change a rule only after ruling out a one-off
+exception, not on a single data point. This is manual/assisted (Claude reads
+the evidence and proposes the edit, Lucas approves the diff) rather than
+Claude silently rewriting the playbook on its own.
 
 ## Operating protocol
 
@@ -159,8 +200,8 @@ on-demand reply check):
    manually.
 2. **Due follow-ups** — a text got no reply and `followUp.afterDays` has
    passed. Queues the email follow-up as a new `'proposed'` touch, same
-   approval flow as anything from `npm run assess`. Verified idempotent —
-   never queued twice for the same original touch.
+   approval flow as anything from `npm run gather`/`propose`. Verified
+   idempotent — never queued twice for the same original touch.
 
 Not scheduled/continuous yet — run on demand until a periodic check is
 wired up.

@@ -4,21 +4,27 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "assess": "tsx src/cli/assess.ts",
+    "gather": "tsx src/cli/gather.ts",
+    "propose": "tsx src/cli/propose.ts",
     "stats": "tsx src/cli/stats.ts",
     "outcome": "tsx src/cli/outcome.ts",
     "send": "tsx src/cli/send.ts",
     "lookup": "tsx src/cli/lookup.ts",
     "check-replies": "tsx src/cli/check-replies.ts",
+    "conversions": "tsx src/cli/conversions.ts",
+    "report": "tsx src/cli/report.ts",
+    "dashboard": "tsx app/server.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "dotenv": "16.4.5",
+    "express": "^5.2.1",
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "typescript": "5.5.4",
+    "@types/express": "^5.0.6",
+    "@types/node": "20.14.15",
     "tsx": "4.16.2",
-    "@types/node": "20.14.15"
+    "typescript": "5.5.4"
   }
 }

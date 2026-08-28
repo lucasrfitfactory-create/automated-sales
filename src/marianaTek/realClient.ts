@@ -227,8 +227,28 @@ export function createRealMarianaTekClient(opts: { apiUrl: string; apiKey: strin
       // pitching Fit Factory Weekly Unlimited off the wrong product
       // (confirmed as a real bug against live data 2026-08-26).
       const isOtherBusinessProduct = (name: string) => /refined|reformer|\bpsc\b/i.test(name);
-      const instances = d.data.filter((i) => !isOtherBusinessProduct(i.attributes.membership_name ?? ''));
-      if (instances.length === 0) return { kind: 'no_active_status' };
+      // A genuine intro-offer/trial always has a real start_date. Some
+      // ClassPass-linked clients have an intro-offer-flagged instance with
+      // NO dates at all (start_date null) — a categorization marker
+      // ("they're a ClassPass client"), not an actual timed trial. Treating
+      // it as one computes garbage (new Date(null) = epoch 1970, so
+      // "expired 20,693 days ago") and blocks the real ClassPass-guest
+      // treatment. Confirmed 2026-08-27, Crystal Peng: pure ClassPass
+      // booker (every reservation shows "ClassPass ClassPass"), no real
+      // Fit Factory trial, but a dateless "CLASS PASS CLIENT OFFER"
+      // instance was misread as an expired trial.
+      const isDatelessTrialPlaceholder = (i: (typeof d.data)[number]) => i.attributes.is_intro_offer && !i.attributes.start_date;
+      // NOTE: deliberately no early return when `instances` is empty — a
+      // pack-only client (never bought a trial/membership product, so zero
+      // membership_instances) still needs to reach Priority 4 below.
+      // Confirmed 2026-08-27, Kelsey Butler: an early return here skipped
+      // class-pack detection entirely and misread her as no_active_status
+      // despite a real, unexpired pack with credits remaining. Priorities
+      // 1-3 below use .find() on `instances`, which safely no-ops on an
+      // empty array, so they still fall through correctly to Priority 4/5.
+      const instances = d.data
+        .filter((i) => !isOtherBusinessProduct(i.attributes.membership_name ?? ''))
+        .filter((i) => !isDatelessTrialPlaceholder(i));
 
       const endedAtOf = (a: any): string =>
         a.cancellation_datetime ?? a.scheduled_end_datetime ?? a.end_date ?? a.calculated_start_datetime ?? a.purchase_date ?? a.start_date ?? 'unknown';
@@ -245,12 +265,52 @@ export function createRealMarianaTekClient(opts: { apiUrl: string; apiKey: strin
       const trialEndDateOf = (a: any): string =>
         a.end_date ?? a.scheduled_end_datetime ?? a.calculated_end_datetime ?? a.payment_interval_end_date ?? a.next_charge_date ?? a.start_date;
 
-      // Priority 1: a real (non-intro) active membership means they've
-      // converted — "we're good" (per Lucas 2026-08-26), regardless of any
-      // trial or past-lapsed instance also on file.
-      const realActive = instances.find((i) => i.attributes.status === 'active' && !i.attributes.is_intro_offer);
+      // Priority 1: a real (non-intro) membership means they've converted —
+      // "we're good" (per Lucas 2026-08-26), regardless of any trial or
+      // past-lapsed instance also on file. Status isn't only 'active': a
+      // brand-new signup sits in 'pending_customer_activation' until some
+      // activation step completes, and a renewal/forward-dated signup sits
+      // in 'pending_start_date' until its start date arrives — both are
+      // real, already-purchased memberships (purchase_date/renewal_count
+      // present, no cancellation), not still-open leads. Confirmed
+      // 2026-08-28, Nicolas Nkiere: closed personally by Lucas after a
+      // pricing negotiation the pipeline flagged as an active conversation;
+      // Mariana Tek created the new $69/week instance same-day but left it
+      // 'pending_customer_activation', so this fell through undetected to
+      // Priority 3 (his old expired trial instance) — the conversion was
+      // real but invisible to both the playbook and conversion tracking.
+      // start_date is null on these pending statuses, so purchase_date is
+      // the only real anchor for "when did this happen."
+      const realActive = instances.find(
+        (i) =>
+          !i.attributes.is_intro_offer &&
+          (i.attributes.status === 'active' ||
+            i.attributes.status === 'pending_customer_activation' ||
+            i.attributes.status === 'pending_start_date'),
+      );
       if (realActive) {
         const a = realActive.attributes;
+        return { kind: 'membership_active', planName: a.membership_name, memberSince: a.start_date ?? a.purchase_date };
+      }
+
+      // Priority 1.5: a real (non-intro) membership whose latest renewal
+      // charge just failed — status literally 'payment_failure'. Still a
+      // real member (renewal_count/billing_cycles keep going, no
+      // cancellation_datetime), just hit a card decline — NOT lapsed, and
+      // should never get a "come back, get your membership going again"
+      // win-back pitch implying they left. Confirmed 2026-08-27, Natali
+      // Pineros: an 8-renewal-deep membership hit `payment_failure` on
+      // today's charge and fell through to the lapsed fallback below,
+      // which then grabbed her membership's START date as if it were an
+      // end date (no end_date/cancellation_datetime exists on this status
+      // to anchor on) and pitched her a win-back for a membership she
+      // still has. Treated as membership_active for now — there's no
+      // dedicated "update your payment method" segment in the playbook
+      // yet, so this just makes sure she isn't pitched at all until one
+      // exists.
+      const paymentFailure = instances.find((i) => i.attributes.status === 'payment_failure' && !i.attributes.is_intro_offer);
+      if (paymentFailure) {
+        const a = paymentFailure.attributes;
         return { kind: 'membership_active', planName: a.membership_name, memberSince: a.start_date };
       }
 
@@ -297,11 +357,20 @@ export function createRealMarianaTekClient(opts: { apiUrl: string; apiKey: strin
       // enough to identify it as a pack, not necessarily its marketing name.
       const creditData = await get<JsonApiList>('/api/credit_transactions/', { user: clientId, page_size: '100' });
       const now = new Date().toISOString();
+      // Filter to actual usable credit (> 0) BEFORE picking the
+      // soonest-to-expire one — a client can hold multiple grants at once
+      // (e.g. an old pack that's used up sitting alongside a newer one with
+      // real balance). Sorting by expiration first and taking [0] used to
+      // pick whichever grant expires soonest even if it had zero credits
+      // left, then bail out entirely instead of checking the next one.
+      // Confirmed 2026-08-27, Kelsey Butler: a 0-remaining pack expiring
+      // Oct 21 was selected over her real 3-remaining pack expiring Dec 31,
+      // reading her as no_active_status despite genuinely having credit.
       const activePack = creditData.data
-        .filter((t) => t.attributes.remaining_credits_cache !== null)
+        .filter((t) => t.attributes.remaining_credits_cache !== null && t.attributes.remaining_credits_cache > 0)
         .filter((t) => (t.attributes.expiration_datetime ?? '9999') > now)
         .sort((x, y) => (x.attributes.expiration_datetime ?? '').localeCompare(y.attributes.expiration_datetime ?? ''))[0];
-      if (activePack && activePack.attributes.remaining_credits_cache > 0) {
+      if (activePack) {
         const a = activePack.attributes;
         return {
           kind: 'class_pack',
