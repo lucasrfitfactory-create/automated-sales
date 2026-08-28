@@ -1,23 +1,6 @@
 import 'dotenv/config';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { Repository } from '../store/repository.js';
 import { createMarianaTekClient } from '../marianaTek/index.js';
-
-// Persistent, offline-readable record of what this script finds — the HTML
-// recap page (src/cli/report.ts) reads this instead of hitting live APIs
-// itself, so regenerating the page stays fast and doesn't need credentials.
-const LOG_PATH = 'data/conversion-log.json';
-interface ConversionLog {
-  conversions: Array<{ contactId: string; name: string; planName: string; memberSince: string; daysToConvert: number; segmentKey: string; recordedAt: string }>;
-  targetingFlags: Array<{ contactId: string; name: string; memberSince: string; touchDate: string; flaggedAt: string }>;
-}
-function loadLog(): ConversionLog {
-  if (!existsSync(LOG_PATH)) return { conversions: [], targetingFlags: [] };
-  return JSON.parse(readFileSync(LOG_PATH, 'utf8'));
-}
-function saveLog(log: ConversionLog): void {
-  writeFileSync(LOG_PATH, JSON.stringify(log, null, 2));
-}
 
 // Closes the loop on `npm run stats`'s "converted" column: that column has
 // always existed (computeSegmentStats counts status === 'converted'), but
@@ -60,8 +43,6 @@ if (firstOutreachByContact.size === 0) {
 const newConversions: Array<{ name: string; segmentKey: string; planName: string; memberSince: string; daysToConvert: number }> = [];
 const alreadyConverted: string[] = [];
 const preExisting: Array<{ name: string; memberSince: string; touchDate: string }> = [];
-const log = loadLog();
-const now = new Date().toISOString();
 
 for (const [contactId, firstTouch] of firstOutreachByContact) {
   const name = `${firstTouch.recipient.firstName} ${firstTouch.recipient.lastName}`;
@@ -80,9 +61,6 @@ for (const [contactId, firstTouch] of firstOutreachByContact) {
     // conversion, flag separately since it usually means a targeting bug
     // (this segment should never have fired for them).
     preExisting.push({ name, memberSince: status.memberSince, touchDate });
-    if (!log.targetingFlags.some((f) => f.contactId === contactId)) {
-      log.targetingFlags.push({ contactId, name, memberSince: status.memberSince, touchDate, flaggedAt: now });
-    }
     continue;
   }
 
@@ -103,10 +81,7 @@ for (const [contactId, firstTouch] of firstOutreachByContact) {
   }
 
   newConversions.push({ name, segmentKey: firstTouch.segmentKey, planName: status.planName, memberSince: status.memberSince, daysToConvert });
-  log.conversions.push({ contactId, name, planName: status.planName, memberSince: status.memberSince, daysToConvert, segmentKey: firstTouch.segmentKey, recordedAt: now });
 }
-
-saveLog(log);
 
 if (newConversions.length === 0) {
   console.log('No new conversions since the last check.');

@@ -61,8 +61,7 @@ import type { FollowUp, ProposedAction, Rule } from './types.js';
 //      the exact math isn't confirmed.
 //   4. (2026-08-26) Membership-conversion initial texts do NOT lead with a
 //      price anchor anymore ("Weekly Unlimited is as low as $49/week" reads
-//      as cheap, per Lucas). Instead: a soft, no-price interest check
-//      ("Would you be open to hearing about some options to continue?").
+//      as cheap, per Lucas). Instead: a soft, no-price interest check.
 //      If they reply with interest, the next message is COMMITMENT_ASK
 //      (short-term vs. long-term) — still no dollar figure. Specific
 //      pricing is saved for once commitment length is known, or for the
@@ -71,6 +70,15 @@ import type { FollowUp, ProposedAction, Rule } from './types.js';
 //      not the opening line). Class Pack Sale copy is unchanged by this —
 //      it's a time-boxed discount promo, a different mechanic from a
 //      standing membership price.
+//   5. (2026-08-28) The interest-check closer must name the actual product
+//      directly — "would you be open to hearing some options to become a
+//      member here?" — never vague phrasing like "make it official," "keep
+//      this going," or "continue." Per Lucas: softening the ask reads as
+//      indirect, not more polite. Applies to every membership-path segment
+//      (trial mid/convert/expired, lapsed win-back, ClassPass guest without
+//      a sale on) — the ClassPass Class Pack Sale pitch is a different
+//      product with its own direct close ("Want me to set you up?") and is
+//      unaffected by this.
 // ============================================================================
 
 const WEEKLY_UNLIMITED_PRICING = formatWeeklyUnlimitedPricing();
@@ -136,8 +144,8 @@ export const PLAYBOOK: Rule[] = [
     const message = saleOn
       ? `Hey ${name}, saw you're back on ClassPass after your trial wrapped up. We've got a Class Pack Sale right now, ${formatClassPackSaleTeaser()}. Want me to set you up?`
       : frequent
-        ? `Hey ${name}, you're in here a lot! Would you be open to hearing about some options to continue?`
-        : `Hey ${name}, welcome back! Would you be open to hearing about some options to continue?`;
+        ? `Hey ${name}, you're in here a lot! Would you be open to hearing some options to become a member here?`
+        : `Hey ${name}, welcome back! Would you be open to hearing some options to become a member here?`;
     const detail = saleOn
       ? `We've got ${formatClassPackSalePitch()}.`
       : `Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment.`;
@@ -167,7 +175,7 @@ export const PLAYBOOK: Rule[] = [
         segmentLabel: `${ctx.status.offerName} — expired ${-daysLeft}d ago, no conversion`,
         channel: 'text',
         headline: 'Trial expired without converting — text first',
-        message: `Hey ${name}, your one-week trial wrapped up a bit ago. Would you be open to hearing about some options to continue?`,
+        message: `Hey ${name}, your one-week trial wrapped up a bit ago. Would you be open to hearing some options to become a member here?`,
         followUp: followUp(name, `Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment.`),
         cooldownDays: 14,
       };
@@ -179,7 +187,7 @@ export const PLAYBOOK: Rule[] = [
         segmentLabel: `${ctx.status.offerName} — ${daysLeft}d left`,
         channel: 'text',
         headline: 'Final push to convert before $39 trial ends — text first',
-        message: `Hey ${name}, your trial wraps up in ${daysLeft}d! Would you be open to hearing about some options to continue before it ends?`,
+        message: `Hey ${name}, your trial wraps up in ${daysLeft}d! Would you be open to hearing some options to become a member here before it ends?`,
         followUp: followUp(name, `Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment.`),
         cooldownDays: 3,
       };
@@ -201,7 +209,7 @@ export const PLAYBOOK: Rule[] = [
       segmentLabel: `${ctx.status.offerName} — mid-trial`,
       channel: 'text',
       headline: 'Mid-trial nudge — text first',
-      message: `Hey ${name}, hope you're loving the classes so far! Would you be open to hearing about some options to keep going after your trial?`,
+      message: `Hey ${name}, hope you're loving the classes so far! Would you be open to hearing some options to become a member here?`,
       followUp: followUp(name, `Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment.`),
       cooldownDays: 4,
     };
@@ -222,7 +230,7 @@ export const PLAYBOOK: Rule[] = [
         segmentLabel: `${ctx.status.offerName} — expired ${-daysLeft}d ago, no conversion`,
         channel: 'text',
         headline: 'Trial expired without converting — text first',
-        message: `Hey ${name}, ${comeback ? 'good having you back for a bit! ' : ''}your trial wrapped up a bit ago. Would you be open to hearing about some options to continue?`,
+        message: `Hey ${name}, ${comeback ? 'good having you back for a bit! ' : ''}your trial wrapped up a bit ago. Would you be open to hearing some options to become a member here?`,
         followUp: followUp(name, `Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment.`),
         cooldownDays: 14,
       };
@@ -234,7 +242,7 @@ export const PLAYBOOK: Rule[] = [
         segmentLabel: `${ctx.status.offerName} — ${daysLeft}d left`,
         channel: 'text',
         headline: 'Final push to convert before 1-month trial ends — text first',
-        message: `Hey ${name}, your trial wraps up in ${daysLeft}d! Would you be open to hearing about some options to continue before it ends?`,
+        message: `Hey ${name}, your trial wraps up in ${daysLeft}d! Would you be open to hearing some options to become a member here before it ends?`,
         followUp: followUp(name, `Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment.`),
         cooldownDays: 3,
       };
@@ -258,7 +266,7 @@ export const PLAYBOOK: Rule[] = [
       segmentLabel: `${ctx.status.offerName} — mid-trial`,
       channel: 'text',
       headline: 'Mid-trial nudge — text first',
-      message: `Hey ${name}, hope the month's been going well! Would you be open to hearing about some options to keep this going?`,
+      message: `Hey ${name}, hope the month's been going well! Would you be open to hearing some options to become a member here?`,
       followUp: followUp(name, `Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment.`),
       cooldownDays: 10,
     };
@@ -276,8 +284,8 @@ export const PLAYBOOK: Rule[] = [
     const message = saleOn
       ? `Hey ${name}, thanks for coming in through ClassPass! We've got a Class Pack Sale right now, ${formatClassPackSaleTeaser()}. Want me to set you up?`
       : frequent
-        ? `Hey ${name}, you've been coming in a lot through ClassPass! Would you be open to hearing about some options to switch things up?`
-        : `Hey ${name}, thanks for coming in through ClassPass! Would you be open to hearing about some options to continue?`;
+        ? `Hey ${name}, you've been coming in a lot through ClassPass! Would you be open to hearing some options to become a member here?`
+        : `Hey ${name}, thanks for coming in through ClassPass! Would you be open to hearing some options to become a member here?`;
     const detail = saleOn ? `We've got ${formatClassPackSalePitch()}.` : `Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment.`;
 
     const action: ProposedAction = {
@@ -352,7 +360,7 @@ export const PLAYBOOK: Rule[] = [
     const frequent = ctx.attendanceLast30Days >= FREQUENT_THRESHOLD;
     const name = ctx.client.firstName;
     const message = frequent
-      ? `Hey ${name}, you've been in a lot lately without a membership! Would you be open to hearing about some options?`
+      ? `Hey ${name}, you've been in a lot lately without a membership! Would you be open to hearing some options to become a member here?`
       : `Hey ${name}, thanks for dropping into class! We've got a $39 one-week unlimited trial. Want me to send you the link?`;
     const detail = frequent
       ? `Weekly Unlimited runs ${WEEKLY_UNLIMITED_PRICING} depending on commitment.`
